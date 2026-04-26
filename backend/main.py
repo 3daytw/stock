@@ -207,6 +207,73 @@ async def ai_query(req: QueryRequest):
         raise HTTPException(status_code=500, detail=f"AI query failed: {str(e)}")
 
 
+@app.get("/api/stock/{stock_id}/revenue")
+async def get_stock_revenue(stock_id: str):
+    start = (datetime.now() - timedelta(days=760)).strftime("%Y-%m-%d")
+    end = datetime.now().strftime("%Y-%m-%d")
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            resp = await client.get(FINMIND_API, params={
+                "dataset": "TaiwanStockMonthRevenue",
+                "data_id": stock_id,
+                "start_date": start,
+                "end_date": end,
+                "token": FINMIND_TOKEN,
+            })
+            resp.raise_for_status()
+            result = resp.json()
+            if result.get("status") != 200:
+                return []
+            return result.get("data", [])
+        except Exception:
+            return []
+
+
+@app.get("/api/stock/{stock_id}/financials")
+async def get_stock_financials(stock_id: str):
+    start = (datetime.now() - timedelta(days=760)).strftime("%Y-%m-%d")
+    end = datetime.now().strftime("%Y-%m-%d")
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            resp = await client.get(FINMIND_API, params={
+                "dataset": "TaiwanStockFinancialStatements",
+                "data_id": stock_id,
+                "start_date": start,
+                "end_date": end,
+                "token": FINMIND_TOKEN,
+            })
+            resp.raise_for_status()
+            result = resp.json()
+            if result.get("status") != 200:
+                return []
+            keep = {"EPS", "GrossProfit", "Revenue", "IncomeAfterTaxes"}
+            return [r for r in result.get("data", []) if r.get("type") in keep]
+        except Exception:
+            return []
+
+
+@app.get("/api/stock/{stock_id}/per")
+async def get_stock_per(stock_id: str):
+    start = (datetime.now() - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+    end = datetime.now().strftime("%Y-%m-%d")
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            resp = await client.get(FINMIND_API, params={
+                "dataset": "TaiwanStockPER",
+                "data_id": stock_id,
+                "start_date": start,
+                "end_date": end,
+                "token": FINMIND_TOKEN,
+            })
+            resp.raise_for_status()
+            result = resp.json()
+            if result.get("status") != 200:
+                return []
+            return result.get("data", [])
+        except Exception:
+            return []
+
+
 # Static files — must be mounted last
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 if FRONTEND_DIR.exists():

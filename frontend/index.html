@@ -172,6 +172,54 @@ body {
 .mob-tab.on svg { stroke:var(--blu); }
 
 /* ── Mobile responsive ── */
+/* ── Financial Panel ── */
+#fund {
+  display:none; flex-direction:column; background:var(--bg2);
+  border:1px solid var(--bd); border-radius:8px; flex-shrink:0;
+  height:215px; overflow:hidden;
+}
+#fund.show { display:flex; }
+#fund-tabs { display:flex; border-bottom:1px solid var(--bd); flex-shrink:0; padding:0 4px; }
+.ft {
+  padding:7px 10px; font-size:11px; color:var(--tx2); cursor:pointer;
+  border:none; background:none; border-bottom:2px solid transparent;
+  transition:all .15s; white-space:nowrap;
+}
+.ft.on { color:var(--blu); border-bottom-color:var(--blu); }
+#fund-body {
+  flex:1; overflow-x:auto; overflow-y:hidden; padding:6px 10px; min-height:0;
+}
+#fund-body::-webkit-scrollbar { height:3px; }
+#fund-body::-webkit-scrollbar-thumb { background:var(--bd); border-radius:2px; }
+.find { display:flex; gap:5px; height:100%; min-width:max-content; }
+.bc { display:flex; flex-direction:column; align-items:center; gap:1px; width:36px; }
+.bv { font-size:8px; color:var(--tx); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
+.by { font-size:8px; text-align:center; white-space:nowrap; line-height:1.2; }
+.bw { height:74px; display:flex; align-items:flex-end; width:100%; }
+.br { width:100%; border-radius:2px 2px 0 0; }
+.br.pos { background:#3fb95088; } .br.neg { background:#f8514988; }
+.bl { font-size:8px; color:var(--tx2); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
+.bsub { font-size:10px; color:var(--tx2); white-space:nowrap; margin-top:4px; align-self:flex-start; }
+/* Valuation zone */
+.vz { display:flex; flex-direction:column; gap:5px; width:100%; padding-top:2px; }
+.vtrack { position:relative; height:10px; border-radius:5px;
+  background:linear-gradient(to right,#58a6ff66,#3fb95066,#f0ad4e66,#f8514966); }
+.vneedle { position:absolute; top:-3px; width:3px; height:16px; background:#fff;
+  border-radius:2px; transform:translateX(-50%); box-shadow:0 0 4px rgba(0,0,0,.5); }
+.vpl { display:flex; justify-content:space-between; font-size:10px; font-weight:700; }
+.vpl span:nth-child(1){color:#58a6ff} .vpl span:nth-child(2){color:#3fb950}
+.vpl span:nth-child(3){color:#f0ad4e} .vpl span:nth-child(4){color:#f85149}
+.vll { display:flex; justify-content:space-between; font-size:8px; color:var(--tx2); }
+.vmeta { display:flex; gap:12px; flex-wrap:wrap; margin-top:4px; }
+.vm { display:flex; flex-direction:column; }
+.vml { font-size:8px; color:var(--tx2); }
+.vmv { font-size:14px; font-weight:700; line-height:1.3; }
+.nd { display:flex; align-items:center; justify-content:center; height:100%; color:var(--tx2); font-size:12px; }
+
+@media (max-width: 767px) {
+  #fund { height:195px; }
+}
+
 @media (max-width: 767px) {
   #mob-nav { display:flex; }
   #body { position:relative; }
@@ -262,6 +310,14 @@ body {
       </div>
       <div id="cbox">
         <div id="cbox-hint">請選擇左側股票以顯示 K 線圖</div>
+      </div>
+      <div id="fund">
+        <div id="fund-tabs">
+          <button class="ft on" data-tab="rev" onclick="showFund('rev')">月營收</button>
+          <button class="ft" data-tab="eps" onclick="showFund('eps')">EPS 季報</button>
+          <button class="ft" data-tab="val" onclick="showFund('val')">估值分析</button>
+        </div>
+        <div id="fund-body"><div class="nd">載入中…</div></div>
       </div>
     </div>
   </div>
@@ -427,8 +483,10 @@ async function pickStock(id, name) {
   document.getElementById('ibar-sname').textContent = name;
   document.getElementById('ibar-sid').textContent = id;
 
-  // Clear old % badges
+  // Clear old % badges and reset fund panel
   document.querySelectorAll('.rp').forEach(el => { el.textContent = '—'; el.className = 'rp'; });
+  document.getElementById('fund').classList.remove('show');
+  fundData = { rev: null, fin: null, per: null };
 
   // On mobile, switch to chart tab
   if (window.innerWidth < 768) showTab('main');
@@ -445,6 +503,7 @@ async function pickStock(id, name) {
     const defaultBtn = document.querySelector('.rb.on') || document.querySelector('[data-d="180"]');
     if (defaultBtn) renderRangeFromFull(defaultBtn);
     else renderDailySlice(180);
+    loadFundamentals(id);
   } catch {
     setChartHint('載入失敗，請稍後再試');
   }
@@ -695,6 +754,170 @@ function fmt(s) {
 function now() { return new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}); }
 function fmtDate(d) { return d.toISOString().split('T')[0]; }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Financial Panel ──────────────────────────────
+let fundData = { rev: null, fin: null, per: null };
+let activeFundTab = 'rev';
+
+async function loadFundamentals(id) {
+  document.getElementById('fund').classList.add('show');
+  document.getElementById('fund-body').innerHTML = '<div class="nd">載入財務資料中…</div>';
+  try {
+    const [rev, fin, per] = await Promise.all([
+      fetch(`${API}/stock/${id}/revenue`).then(r => r.json()),
+      fetch(`${API}/stock/${id}/financials`).then(r => r.json()),
+      fetch(`${API}/stock/${id}/per`).then(r => r.json()),
+    ]);
+    fundData = { rev, fin, per };
+    showFund(activeFundTab);
+  } catch {
+    document.getElementById('fund-body').innerHTML = '<div class="nd">財務資料載入失敗</div>';
+  }
+}
+
+function showFund(tab) {
+  activeFundTab = tab;
+  document.querySelectorAll('.ft').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  if (tab === 'rev') renderRevenue();
+  else if (tab === 'eps') renderEPS();
+  else renderValuation();
+}
+
+function renderRevenue() {
+  const data = fundData.rev;
+  if (!data?.length) {
+    document.getElementById('fund-body').innerHTML = '<div class="nd">無月營收資料（ETF 不適用）</div>';
+    return;
+  }
+  const rows = [...data].sort((a, b) => a.date.localeCompare(b.date)).slice(-18);
+  const maxRev = Math.max(...rows.map(r => +r.revenue));
+
+  // cumulative YTD comparison
+  const curYear = new Date().getFullYear();
+  const ytdCur = rows.filter(r => +r.date.slice(0,4) === curYear).reduce((s,r) => s + +r.revenue, 0);
+  const ytdPrev = rows.filter(r => +r.date.slice(0,4) === curYear - 1).slice(0, rows.filter(r => +r.date.slice(0,4) === curYear).length).reduce((s,r) => s + +r.revenue, 0);
+  const ytdYoy = ytdPrev > 0 ? (ytdCur - ytdPrev) / ytdPrev * 100 : null;
+  const ytdStr = ytdCur > 0 ? `累計 ${(ytdCur/1e8).toFixed(0)}億${ytdYoy !== null ? ` YoY ${ytdYoy>=0?'+':''}${ytdYoy.toFixed(1)}%` : ''}` : '';
+
+  const cols = rows.map(r => {
+    const rDate = new Date(r.date);
+    const prevRow = rows.find(p => {
+      const pd = new Date(p.date);
+      return pd.getFullYear() === rDate.getFullYear() - 1 && pd.getMonth() === rDate.getMonth();
+    });
+    const yoy = prevRow ? (+r.revenue - +prevRow.revenue) / +prevRow.revenue * 100 : null;
+    const h = Math.max(2, Math.round(+r.revenue / maxRev * 70));
+    const revB = (+r.revenue / 1e8).toFixed(1);
+    const lbl = r.date.slice(0, 7).replace('-', '/');
+    return `<div class="bc">
+      <div class="bv">${revB}億</div>
+      <div class="by ${yoy === null ? '' : yoy >= 0 ? 'up' : 'dn'}">${yoy !== null ? (yoy>=0?'+':'')+yoy.toFixed(1)+'%' : ''}</div>
+      <div class="bw"><div class="br ${yoy === null || yoy >= 0 ? 'pos' : 'neg'}" style="height:${h}px"></div></div>
+      <div class="bl">${lbl}</div>
+    </div>`;
+  });
+
+  document.getElementById('fund-body').innerHTML =
+    `<div class="find">${cols.join('')}</div>${ytdStr ? `<div class="bsub">${ytdStr}</div>` : ''}`;
+}
+
+function renderEPS() {
+  const fin = fundData.fin;
+  const eps = fin?.filter(r => r.type === 'EPS').sort((a, b) => a.date.localeCompare(b.date)).slice(-8);
+  if (!eps?.length) {
+    document.getElementById('fund-body').innerHTML = '<div class="nd">無 EPS 資料（ETF 不適用）</div>';
+    return;
+  }
+  const maxAbs = Math.max(...eps.map(r => Math.abs(+r.value)));
+
+  const cols = eps.map((r, i) => {
+    const v = +r.value;
+    const prev = eps.find(p => {
+      const pd = new Date(p.date), rd = new Date(r.date);
+      return pd.getFullYear() === rd.getFullYear() - 1 && Math.abs(pd.getMonth() - rd.getMonth()) <= 1;
+    });
+    const yoy = prev && +prev.value !== 0 ? (v - +prev.value) / Math.abs(+prev.value) * 100 : null;
+    const h = maxAbs > 0 ? Math.max(2, Math.round(Math.abs(v) / maxAbs * 70)) : 2;
+    const lbl = r.date.slice(0, 7).replace('-', '/');
+    return `<div class="bc">
+      <div class="bv">${v.toFixed(2)}</div>
+      <div class="by ${yoy === null ? '' : yoy >= 0 ? 'up' : 'dn'}">${yoy !== null ? (yoy>=0?'+':'')+yoy.toFixed(1)+'%' : ''}</div>
+      <div class="bw"><div class="br ${v >= 0 ? 'pos' : 'neg'}" style="height:${h}px"></div></div>
+      <div class="bl">${lbl}</div>
+    </div>`;
+  });
+
+  document.getElementById('fund-body').innerHTML = `<div class="find">${cols.join('')}</div>`;
+}
+
+function renderValuation() {
+  const { fin, per } = fundData;
+  if (!fin?.length || !per?.length) {
+    document.getElementById('fund-body').innerHTML = '<div class="nd">無估值資料（ETF 不適用）</div>';
+    return;
+  }
+  const epsRows = fin.filter(r => r.type === 'EPS').sort((a, b) => a.date.localeCompare(b.date));
+  if (epsRows.length < 2) {
+    document.getElementById('fund-body').innerHTML = '<div class="nd">EPS 資料不足</div>';
+    return;
+  }
+  const ttmEPS = epsRows.slice(-4).reduce((s, r) => s + +r.value, 0);
+
+  const pers = per.filter(r => +r.PER > 0 && +r.PER < 300).map(r => +r.PER).sort((a, b) => a - b);
+  if (!pers.length) {
+    document.getElementById('fund-body').innerHTML = '<div class="nd">本益比資料不足</div>';
+    return;
+  }
+  const pctile = p => pers[Math.min(pers.length - 1, Math.floor(p / 100 * pers.length))];
+  const [pe15, pe30, pe50, pe80] = [pctile(15), pctile(30), pctile(50), pctile(80)];
+  const zones = [pe15 * ttmEPS, pe30 * ttmEPS, pe50 * ttmEPS, pe80 * ttmEPS];
+
+  const curPrice = fullData?.length ? +fullData[fullData.length - 1].close : 0;
+  const latPer = per[per.length - 1];
+  const curPER = +latPer.PER;
+  const divYield = +latPer.dividend_yield;
+
+  const needlePct = zones[3] > zones[0]
+    ? Math.min(98, Math.max(2, (curPrice - zones[0]) / (zones[3] - zones[0]) * 100))
+    : 50;
+
+  // P/S ratio
+  let psHtml = '';
+  const revRows = fin.filter(r => r.type === 'Revenue').sort((a, b) => a.date.localeCompare(b.date)).slice(-4);
+  const niRows  = fin.filter(r => r.type === 'IncomeAfterTaxes').sort((a, b) => a.date.localeCompare(b.date)).slice(-4);
+  if (revRows.length >= 4 && niRows.length >= 4 && ttmEPS !== 0) {
+    const ttmRev = revRows.reduce((s, r) => s + +r.value, 0);
+    const ttmNI  = niRows.reduce((s, r) => s + +r.value, 0);
+    if (ttmNI !== 0 && ttmRev !== 0) {
+      const revPerShare = ttmRev * ttmEPS / ttmNI;
+      if (revPerShare > 0) {
+        const ps = curPrice / revPerShare;
+        psHtml = `<div class="vm"><div class="vml">股價/營收(P/S)</div><div class="vmv">${ps.toFixed(2)}x</div></div>`;
+      }
+    }
+  }
+
+  const f = v => v >= 1000 ? v.toFixed(0) : v.toFixed(1);
+  document.getElementById('fund-body').innerHTML = `
+    <div class="vz">
+      <div class="vpl">
+        <span>特價 ${f(zones[0])}</span><span>便宜 ${f(zones[1])}</span>
+        <span>合理 ${f(zones[2])}</span><span>昂貴 ${f(zones[3])}</span>
+      </div>
+      <div class="vtrack"><div class="vneedle" style="left:${needlePct}%"></div></div>
+      <div class="vll">
+        <span>P/E ${pe15.toFixed(0)}x</span><span>P/E ${pe30.toFixed(0)}x</span>
+        <span>P/E ${pe50.toFixed(0)}x</span><span>P/E ${pe80.toFixed(0)}x</span>
+      </div>
+      <div class="vmeta">
+        <div class="vm"><div class="vml">TTM EPS</div><div class="vmv">${ttmEPS.toFixed(2)}</div></div>
+        <div class="vm"><div class="vml">現在股價</div><div class="vmv ${curPrice >= zones[2] ? 'dn' : 'up'}">${curPrice.toFixed(1)}</div></div>
+        <div class="vm"><div class="vml">本益比</div><div class="vmv">${curPER > 0 ? curPER.toFixed(1)+'x' : '—'}</div></div>
+        ${divYield > 0 ? `<div class="vm"><div class="vml">殖利率</div><div class="vmv">${divYield.toFixed(2)}%</div></div>` : ''}
+        ${psHtml}
+      </div>
+    </div>`;
+}
 
 init();
 </script>
