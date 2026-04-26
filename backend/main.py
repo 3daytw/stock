@@ -71,6 +71,24 @@ AI_STOCKS = [
     {"id": "4971", "name": "華東科技", "category": "連接器"},
     {"id": "3533", "name": "嘉澤",     "category": "連接器"},
     {"id": "2392", "name": "正崴",     "category": "連接器"},
+    # ETF 配息型
+    {"id": "0056",   "name": "元大高股息",       "category": "ETF配息"},
+    {"id": "00878",  "name": "國泰永續高股息",   "category": "ETF配息"},
+    {"id": "00919",  "name": "群益台灣精選高息", "category": "ETF配息"},
+    {"id": "00929",  "name": "復華台灣科技優息", "category": "ETF配息"},
+    {"id": "00940",  "name": "元大台灣價值高息", "category": "ETF配息"},
+    # ETF 主動型
+    {"id": "00936",  "name": "台新臺灣IC設計興中",   "category": "ETF主動"},
+    {"id": "00943",  "name": "元大台灣高科技50",      "category": "ETF主動"},
+    {"id": "00944",  "name": "群益半導體收益",        "category": "ETF主動"},
+    {"id": "00946",  "name": "台新永續高息中小",      "category": "ETF主動"},
+    {"id": "00930",  "name": "永豐ESG低碳高息",       "category": "ETF主動"},
+    # ETF 指數型
+    {"id": "0050",   "name": "元大台灣50",    "category": "ETF指數"},
+    {"id": "006208", "name": "富邦台50",      "category": "ETF指數"},
+    {"id": "00692",  "name": "富邦公司治理",  "category": "ETF指數"},
+    {"id": "00733",  "name": "富邦臺灣中小",  "category": "ETF指數"},
+    {"id": "0051",   "name": "元大中型100",   "category": "ETF指數"},
 ]
 
 
