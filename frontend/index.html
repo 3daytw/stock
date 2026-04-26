@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AI 概念股分析平台</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root {
+  --bg:  #0d1117; --bg2: #161b22; --bg3: #21262d;
+  --bd:  #30363d; --tx:  #e6edf3; --tx2: #8b949e;
+  --grn: #3fb950; --red: #f85149; --blu: #58a6ff;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; }
+body {
+  display:flex; flex-direction:column; height:100dvh;
+  background:var(--bg); color:var(--tx);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:14px; overflow:hidden;
+}
+
+/* ── Header ── */
+#hdr {
+  height:46px; background:var(--bg2); border-bottom:1px solid var(--bd);
+  display:flex; align-items:center; padding:0 14px; gap:8px; flex-shrink:0;
+  z-index:10;
+}
+#hdr h1 { font-size:15px; font-weight:700; color:var(--blu); white-space:nowrap; }
+#hdr .sub { font-size:11px; color:var(--tx2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ── 3-panel body ── */
+#body { display:flex; flex:1; overflow:hidden; min-height:0; }
+
+/* ── Sidebar ── */
+#sb {
+  width:220px; background:var(--bg2); border-right:1px solid var(--bd);
+  display:flex; flex-direction:column; flex-shrink:0; overflow:hidden;
+}
+#sb-top { padding:10px; border-bottom:1px solid var(--bd); display:flex; flex-direction:column; gap:6px; }
+#search {
+  background:var(--bg3); border:1px solid var(--bd); border-radius:6px;
+  padding:7px 10px; color:var(--tx); font-size:13px; outline:none; width:100%;
+}
+#search:focus { border-color:var(--blu); }
+#cats { display:flex; flex-wrap:wrap; gap:3px; }
+.cb {
+  padding:2px 7px; border-radius:10px; font-size:10px; cursor:pointer;
+  border:1px solid var(--bd); background:transparent; color:var(--tx2); transition:all .15s;
+}
+.cb:hover,.cb.on { background:var(--blu); color:#fff; border-color:var(--blu); }
+#slist { flex:1; overflow-y:auto; }
+#slist::-webkit-scrollbar { width:3px; }
+#slist::-webkit-scrollbar-thumb { background:var(--bd); border-radius:2px; }
+.si {
+  padding:8px 12px; cursor:pointer; border-left:3px solid transparent; transition:background .12s;
+}
+.si:hover { background:var(--bg3); }
+.si.on { background:var(--bg3); border-left-color:var(--blu); }
+.si-row { display:flex; justify-content:space-between; align-items:center; }
+.si-name { font-weight:600; font-size:13px; }
+.si-id { font-size:10px; color:var(--tx2); }
+.si-p { font-size:13px; font-weight:600; }
+.si-c { font-size:10px; }
+.up { color:var(--grn); } .dn { color:var(--red); }
+
+/* ── Main ── */
+#main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+
+/* info bar */
+#ibar {
+  height:52px; background:var(--bg2); border-bottom:1px solid var(--bd);
+  display:flex; align-items:center; padding:0 14px; gap:16px; flex-shrink:0; overflow-x:auto;
+}
+#ibar::-webkit-scrollbar { display:none; }
+#ibar-hint { color:var(--tx2); font-size:13px; white-space:nowrap; }
+#ibar-data { display:none; align-items:center; gap:16px; white-space:nowrap; }
+#ibar-sname { font-size:16px; font-weight:700; }
+#ibar-sid { font-size:11px; color:var(--tx2); }
+#ibar-price { font-size:20px; font-weight:700; }
+.iv { display:flex; flex-direction:column; gap:1px; }
+.il { font-size:9px; color:var(--tx2); text-transform:uppercase; letter-spacing:.4px; }
+.iv-v { font-size:12px; font-weight:600; }
+
+/* chart section */
+#csec { flex:1; display:flex; flex-direction:column; padding:10px; gap:6px; overflow:hidden; min-height:0; }
+
+/* Range buttons with % badge */
+#rbar { display:flex; gap:4px; align-items:flex-end; overflow-x:auto; padding-bottom:2px; }
+#rbar::-webkit-scrollbar { display:none; }
+.rb {
+  display:flex; flex-direction:column; align-items:center; gap:1px;
+  padding:4px 8px; border-radius:5px; cursor:pointer; flex-shrink:0;
+  border:1px solid var(--bd); background:transparent; color:var(--tx2);
+  min-width:48px; transition:all .15s;
+}
+.rb:hover { border-color:var(--tx2); }
+.rb.on { background:var(--blu); color:#fff; border-color:var(--blu); }
+.rb.on .rp { color:rgba(255,255,255,.85); }
+.rb-lbl { font-size:12px; font-weight:600; line-height:1; }
+.rp { font-size:10px; line-height:1; color:var(--tx2); white-space:nowrap; }
+
+#cbox {
+  flex:1; background:var(--bg2); border-radius:8px; border:1px solid var(--bd);
+  overflow:hidden; position:relative; min-height:0;
+}
+#cbox-hint {
+  position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; color:var(--tx2); font-size:13px; pointer-events:none;
+}
+
+/* ── AI Panel ── */
+#ai {
+  width:300px; background:var(--bg2); border-left:1px solid var(--bd);
+  display:flex; flex-direction:column; flex-shrink:0;
+}
+#ai-hdr {
+  padding:10px 14px; border-bottom:1px solid var(--bd);
+  display:flex; align-items:center; gap:7px; flex-shrink:0;
+}
+#ai-hdr h3 { font-size:13px; font-weight:600; }
+.badge { background:var(--blu); color:#fff; font-size:10px; padding:1px 6px; border-radius:8px; }
+#msgs { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; min-height:0; }
+#msgs::-webkit-scrollbar { width:3px; }
+#msgs::-webkit-scrollbar-thumb { background:var(--bd); border-radius:2px; }
+.msg { display:flex; flex-direction:column; gap:3px; }
+.msg.u { align-items:flex-end; }
+.msg.a { align-items:flex-start; }
+.bbl {
+  max-width:90%; padding:8px 11px; border-radius:12px;
+  font-size:12px; line-height:1.55; word-break:break-word;
+}
+.msg.u .bbl { background:var(--blu); color:#fff; border-bottom-right-radius:3px; }
+.msg.a .bbl { background:var(--bg3); border:1px solid var(--bd); border-bottom-left-radius:3px; }
+.mt { font-size:10px; color:var(--tx2); }
+#qs { padding:6px 10px; border-top:1px solid var(--bd); display:flex; flex-wrap:wrap; gap:4px; }
+.qb {
+  padding:3px 8px; background:var(--bg3); border:1px solid var(--bd);
+  border-radius:10px; font-size:11px; color:var(--tx2); cursor:pointer; transition:all .15s;
+}
+.qb:hover { border-color:var(--blu); color:var(--blu); }
+#cinp-wrap { padding:10px; border-top:1px solid var(--bd); display:flex; gap:6px; flex-shrink:0; }
+#cinp {
+  flex:1; background:var(--bg3); border:1px solid var(--bd); border-radius:7px;
+  padding:7px 11px; color:var(--tx); font-size:13px; outline:none;
+}
+#cinp:focus { border-color:var(--blu); }
+#sbtn {
+  padding:0 13px; background:var(--blu); border:none; border-radius:7px;
+  color:#fff; cursor:pointer; font-size:13px; transition:opacity .15s;
+}
+#sbtn:hover { opacity:.85; }
+#sbtn:disabled { opacity:.45; cursor:not-allowed; }
+.dots { display:flex; gap:4px; padding:4px 0; align-items:center; }
+.dot { width:6px; height:6px; background:var(--tx2); border-radius:50%; animation:pulse 1.4s infinite ease-in-out; }
+.dot:nth-child(1){animation-delay:-.32s} .dot:nth-child(2){animation-delay:-.16s}
+@keyframes pulse{0%,80%,100%{transform:scale(0);opacity:.4}40%{transform:scale(1);opacity:1}}
+
+/* ── Mobile bottom nav ── */
+#mob-nav {
+  display:none; position:relative; z-index:20;
+  height:56px; background:var(--bg2); border-top:1px solid var(--bd);
+  flex-shrink:0;
+}
+.mob-tab {
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:3px; background:transparent; border:none; color:var(--tx2);
+  cursor:pointer; font-size:10px; transition:color .15s; padding:0;
+}
+.mob-tab svg { width:20px; height:20px; }
+.mob-tab.on { color:var(--blu); }
+.mob-tab.on svg { stroke:var(--blu); }
+
+/* ── Mobile responsive ── */
+@media (max-width: 767px) {
+  #mob-nav { display:flex; }
+  #body { position:relative; }
+
+  #sb {
+    position:absolute; inset:0; z-index:15;
+    width:100%; display:none;
+  }
+  #ai {
+    position:absolute; inset:0; z-index:15;
+    width:100%; display:none;
+  }
+  #main { width:100%; display:flex; }
+
+  #sb.mob-show, #ai.mob-show { display:flex; }
+
+  #hdr .sub { display:none; }
+  #ibar { gap:12px; }
+  #ibar-sname { font-size:14px; }
+  #ibar-price { font-size:17px; }
+
+  .rb { min-width:44px; padding:4px 6px; }
+  .rb-lbl { font-size:11px; }
+  .rp { font-size:9px; }
+}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#58a6ff" stroke-width="2.2">
+    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+    <polyline points="16 7 22 7 22 13"/>
+  </svg>
+  <h1>AI 概念股分析平台</h1>
+  <span class="sub">Taiwan AI Stock Analytics · Claude</span>
+</div>
+
+<div id="body">
+
+  <!-- Sidebar -->
+  <div id="sb">
+    <div id="sb-top">
+      <input id="search" type="text" placeholder="搜尋股票名稱或代號…" autocomplete="off">
+      <div id="cats"></div>
+    </div>
+    <div id="slist"><div style="padding:20px;text-align:center;color:var(--tx2)">載入中…</div></div>
+  </div>
+
+  <!-- Main chart area -->
+  <div id="main">
+    <div id="ibar">
+      <div id="ibar-hint">← 請選擇股票</div>
+      <div id="ibar-data">
+        <div>
+          <div id="ibar-sname">-</div>
+          <div id="ibar-sid">-</div>
+        </div>
+        <div id="ibar-price">-</div>
+        <div class="iv"><div class="il">漲跌</div><div class="iv-v" id="iv-chg">-</div></div>
+        <div class="iv"><div class="il">漲跌幅</div><div class="iv-v" id="iv-pct">-</div></div>
+        <div class="iv"><div class="il">最高</div><div class="iv-v" id="iv-hi">-</div></div>
+        <div class="iv"><div class="il">最低</div><div class="iv-v" id="iv-lo">-</div></div>
+        <div class="iv"><div class="il">成交量</div><div class="iv-v" id="iv-vol">-</div></div>
+        <div class="iv"><div class="il">日期</div><div class="iv-v" id="iv-date">-</div></div>
+      </div>
+    </div>
+    <div id="csec">
+      <div id="rbar">
+        <button class="rb" data-mode="day" data-d="1" onclick="switchRange(this)">
+          <span class="rb-lbl">1D</span><span class="rp" id="rp-1d">—</span>
+        </button>
+        <button class="rb" data-mode="day" data-d="5" onclick="switchRange(this)">
+          <span class="rb-lbl">5D</span><span class="rp" id="rp-5d">—</span>
+        </button>
+        <button class="rb" data-mode="day" data-d="30" onclick="switchRange(this)">
+          <span class="rb-lbl">1M</span><span class="rp" id="rp-30">—</span>
+        </button>
+        <button class="rb on" data-mode="day" data-d="180" onclick="switchRange(this)">
+          <span class="rb-lbl">6M</span><span class="rp" id="rp-180">—</span>
+        </button>
+        <button class="rb" data-mode="day" data-d="365" onclick="switchRange(this)">
+          <span class="rb-lbl">1Y</span><span class="rp" id="rp-365">—</span>
+        </button>
+        <button class="rb" data-mode="day" data-d="730" onclick="switchRange(this)">
+          <span class="rb-lbl">2Y</span><span class="rp" id="rp-730">—</span>
+        </button>
+      </div>
+      <div id="cbox">
+        <div id="cbox-hint">請選擇左側股票以顯示 K 線圖</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI panel -->
+  <div id="ai">
+    <div id="ai-hdr">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#58a6ff" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+      </svg>
+      <h3>AI 股票分析師</h3>
+      <span class="badge">Claude</span>
+    </div>
+    <div id="msgs">
+      <div class="msg a">
+        <div class="bbl">
+          你好！我是 AI 股票分析師，專精台灣 AI 概念股。<br><br>
+          可以問我：<br>
+          · 某股票近期走勢分析<br>
+          · AI 概念股比較與選股<br>
+          · 產業趨勢與市場動態
+        </div>
+        <div class="mt">AI 分析師</div>
+      </div>
+    </div>
+    <div id="qs">
+      <button class="qb" onclick="quick('這支股票近期走勢如何？')">近期走勢</button>
+      <button class="qb" onclick="quick('這支股票的投資亮點？')">投資亮點</button>
+      <button class="qb" onclick="quick('AI概念股哪支最有潛力？')">最有潛力</button>
+      <button class="qb" onclick="quick('台積電近期表現如何？')">台積電</button>
+    </div>
+    <div id="cinp-wrap">
+      <input id="cinp" type="text" placeholder="輸入問題… (Enter 送出)"
+             onkeydown="if(event.key==='Enter')send()">
+      <button id="sbtn" onclick="send()">送出</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile bottom nav -->
+<nav id="mob-nav">
+  <button class="mob-tab" data-tab="sb" onclick="showTab('sb')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+      <line x1="8" y1="18" x2="21" y2="18"/>
+      <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
+      <line x1="3" y1="18" x2="3.01" y2="18"/>
+    </svg>
+    選股
+  </button>
+  <button class="mob-tab on" data-tab="main" onclick="showTab('main')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+      <polyline points="16 7 22 7 22 13"/>
+    </svg>
+    圖表
+  </button>
+  <button class="mob-tab" data-tab="ai" onclick="showTab('ai')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 16v-4M12 8h.01"/>
+    </svg>
+    AI
+  </button>
+</nav>
+
+<script>
+const API = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? 'http://localhost:8000/api'
+  : '/api';
+
+let sel = null;
+let chart = null;
+let fullData = [];   // 2-year daily cache
+let allStocks = [];
+let lctr = 0;
+let activeRangeBtn = null;
+
+// ── Init ─────────────────────────────────────────
+async function init() {
+  try {
+    const r = await fetch(`${API}/stocks`);
+    allStocks = await r.json();
+    renderCats();
+    renderList(allStocks);
+    loadPrices(allStocks);
+  } catch {
+    document.getElementById('slist').innerHTML =
+      '<div style="padding:20px;text-align:center;color:var(--tx2)">無法連線伺服器</div>';
+  }
+}
+
+// ── Stock list ────────────────────────────────────
+function renderCats() {
+  const cats = ['全部', ...new Set(allStocks.map(s => s.category))];
+  document.getElementById('cats').innerHTML = cats.map((c, i) =>
+    `<button class="cb${i===0?' on':''}" onclick="filterCat('${c}',this)">${c}</button>`
+  ).join('');
+}
+
+function renderList(stocks) {
+  document.getElementById('slist').innerHTML = stocks.map(s => `
+    <div class="si${sel?.id===s.id?' on':''}" id="si-${s.id}" onclick="pickStock('${s.id}','${s.name}')">
+      <div class="si-row">
+        <span class="si-name">${s.name}</span>
+        <span class="si-p" id="sp-${s.id}">—</span>
+      </div>
+      <div class="si-row">
+        <span class="si-id">${s.id} · ${s.category}</span>
+        <span class="si-c" id="sc-${s.id}">—</span>
+      </div>
+    </div>`).join('');
+}
+
+async function loadPrices(stocks) {
+  const end = fmtDate(new Date());
+  const start = fmtDate(new Date(Date.now() - 10 * 864e5));
+  for (const s of stocks) {
+    try {
+      const r = await fetch(`${API}/stock/${s.id}/price?start_date=${start}&end_date=${end}`);
+      const data = await r.json();
+      if (data?.length) {
+        const lat = data[data.length - 1];
+        const prev = data.length > 1 ? data[data.length - 2] : null;
+        const chg = prev ? +lat.close - +prev.close : 0;
+        const pct = prev ? chg / +prev.close * 100 : 0;
+        const pe = document.getElementById(`sp-${s.id}`);
+        const ce = document.getElementById(`sc-${s.id}`);
+        if (pe) { pe.textContent = (+lat.close).toFixed(1); pe.className = `si-p ${chg>=0?'up':'dn'}`; }
+        if (ce) { ce.textContent = `${chg>=0?'+':''}${pct.toFixed(2)}%`; ce.className = `si-c ${chg>=0?'up':'dn'}`; }
+      }
+    } catch {}
+    await sleep(150);
+  }
+}
+
+function filterCat(cat, btn) {
+  document.querySelectorAll('.cb').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  applyFilter();
+}
+
+document.getElementById('search').addEventListener('input', applyFilter);
+
+function applyFilter() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const cat = document.querySelector('.cb.on')?.textContent || '全部';
+  renderList(allStocks.filter(s =>
+    (cat === '全部' || s.category === cat) &&
+    (!q || s.name.includes(q) || s.id.includes(q) || s.category.includes(q))
+  ));
+}
+
+// ── Select stock ──────────────────────────────────
+async function pickStock(id, name) {
+  sel = { id, name };
+  document.querySelectorAll('.si').forEach(e => e.classList.remove('on'));
+  document.getElementById(`si-${id}`)?.classList.add('on');
+
+  document.getElementById('ibar-hint').style.display = 'none';
+  const dd = document.getElementById('ibar-data');
+  dd.style.display = 'flex';
+  document.getElementById('ibar-sname').textContent = name;
+  document.getElementById('ibar-sid').textContent = id;
+
+  // Clear old % badges
+  document.querySelectorAll('.rp').forEach(el => { el.textContent = '—'; el.className = 'rp'; });
+
+  // On mobile, switch to chart tab
+  if (window.innerWidth < 768) showTab('main');
+
+  // Load 2Y daily data → base for all range %s
+  setChartHint('載入資料中…');
+  try {
+    const end = fmtDate(new Date());
+    const start = fmtDate(new Date(Date.now() - 730 * 864e5));
+    const r = await fetch(`${API}/stock/${id}/price?start_date=${start}&end_date=${end}`);
+    fullData = await r.json();
+    updateAllRangePcts();
+    // Show default range (6M)
+    const defaultBtn = document.querySelector('.rb.on') || document.querySelector('[data-d="180"]');
+    if (defaultBtn) renderRangeFromFull(defaultBtn);
+    else renderDailySlice(180);
+  } catch {
+    setChartHint('載入失敗，請稍後再試');
+  }
+}
+
+// ── Range % badges ────────────────────────────────
+function updateAllRangePcts() {
+  if (!fullData?.length) return;
+  const latest = +fullData[fullData.length - 1].close;
+
+  // Daily ranges
+  [[30,'rp-30'],[180,'rp-180'],[365,'rp-365'],[730,'rp-730']].forEach(([d, id]) => {
+    const slice = fullData.slice(-d);
+    if (!slice.length) return;
+    setPct(id, latest, +slice[0].close);
+  });
+
+  // 1D: today vs yesterday
+  if (fullData.length >= 2) setPct('rp-1d', latest, +fullData[fullData.length - 2].close);
+
+  // 5D: last 5 trading days
+  if (fullData.length >= 6) setPct('rp-5d', latest, +fullData[fullData.length - 6].close);
+}
+
+function setPct(id, latest, first) {
+  const pct = (latest - first) / first * 100;
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+  el.className = `rp ${pct >= 0 ? 'up' : 'dn'}`;
+}
+
+// ── Range switching ───────────────────────────────
+function switchRange(btn) {
+  document.querySelectorAll('.rb').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  activeRangeBtn = btn;
+  if (!sel) return;
+  renderRangeFromFull(btn);
+}
+
+function renderRangeFromFull(btn) {
+  if (!fullData?.length) return;
+  const d = parseInt(btn.dataset.d);
+  // 1D/5D: show full slice for %, but display at least 10 bars so chart isn't empty
+  const displayBars = d <= 5 ? Math.max(d + 1, 10) : d;
+  const slice = fullData.slice(-displayBars);
+  if (!slice.length) { setChartHint('此區間無資料'); return; }
+  setChartHint('');
+  drawDailyChart(slice);
+  // Info bar: compare based on actual range (1D = today vs yesterday, 5D = today vs 5 days ago)
+  const pctRef = fullData.length > d ? fullData[fullData.length - 1 - d] : fullData[0];
+  updateIbar(slice[slice.length - 1], pctRef);
+}
+
+function renderDailySlice(d) {
+  if (!fullData?.length) return;
+  drawDailyChart(fullData.slice(-d));
+  const lat = fullData[fullData.length - 1];
+  const prev = fullData.length > 1 ? fullData[fullData.length - 2] : null;
+  updateIbar(lat, prev);
+}
+
+async function loadMinuteChart(days) {
+  if (!sel) return;
+  setChartHint('載入分鐘資料…');
+  try {
+    const r = await fetch(`${API}/stock/${sel.id}/minutes?days=${days}`);
+    const data = await r.json();
+    if (!data?.length) { setChartHint('無分鐘資料（可能非交易時間）'); return; }
+    setChartHint('');
+    drawMinuteChart(data);
+    updateIbar(data[data.length - 1], data.length > 1 ? data[data.length - 2] : null, true);
+    // Update 1D/5D % from actual minute data
+    const pctId = days === 1 ? 'rp-1d' : 'rp-5d';
+    setPct(pctId, +data[data.length - 1].close, +data[0].close);
+  } catch {
+    setChartHint('分鐘資料載入失敗');
+  }
+}
+
+// ── Chart drawing ─────────────────────────────────
+function drawDailyChart(data) {
+  const box = document.getElementById('cbox');
+  if (chart) { chart.remove(); chart = null; }
+
+  chart = LightweightCharts.createChart(box, chartOpts(box));
+  const cs = chart.addCandlestickSeries(candleStyle());
+  cs.setData(data.map(d => ({ time: d.date, open: +d.open, high: +d.max, low: +d.min, close: +d.close })));
+  addVolume(chart, data.map(d => ({
+    time: d.date, value: +d.Trading_Volume,
+    color: +d.close >= +d.open ? '#3fb95038' : '#f8514938',
+  })));
+  chart.timeScale().fitContent();
+  watchResize(box);
+}
+
+function drawMinuteChart(data) {
+  const box = document.getElementById('cbox');
+  if (chart) { chart.remove(); chart = null; }
+
+  chart = LightweightCharts.createChart(box, { ...chartOpts(box), timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false } });
+  const cs = chart.addCandlestickSeries(candleStyle());
+  cs.setData(data.map(d => ({
+    time: minToTs(d.date),
+    open: +d.open, high: +d.max, low: +d.min, close: +d.close,
+  })));
+  addVolume(chart, data.map(d => ({
+    time: minToTs(d.date), value: +d.volume,
+    color: +d.close >= +d.open ? '#3fb95038' : '#f8514938',
+  })));
+  chart.timeScale().fitContent();
+  watchResize(box);
+}
+
+function minToTs(s) {
+  // "2024-01-15 09:01:00" → UTC timestamp (Taiwan is UTC+8)
+  return Math.floor(new Date(s.replace(' ', 'T') + '+08:00').getTime() / 1000);
+}
+
+function chartOpts(box) {
+  return {
+    width: box.clientWidth, height: box.clientHeight,
+    layout: { background: { color: '#161b22' }, textColor: '#8b949e' },
+    grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#30363d' },
+    timeScale: { borderColor: '#30363d' },
+  };
+}
+
+function candleStyle() {
+  return { upColor:'#3fb950', downColor:'#f85149', borderUpColor:'#3fb950', borderDownColor:'#f85149', wickUpColor:'#3fb950', wickDownColor:'#f85149' };
+}
+
+function addVolume(c, data) {
+  const vs = c.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+  c.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+  vs.setData(data);
+}
+
+let resizeObs = null;
+function watchResize(box) {
+  if (resizeObs) resizeObs.disconnect();
+  resizeObs = new ResizeObserver(() => {
+    if (chart) chart.applyOptions({ width: box.clientWidth, height: box.clientHeight });
+  });
+  resizeObs.observe(box);
+}
+
+function setChartHint(msg) {
+  const el = document.getElementById('cbox-hint');
+  el.style.display = msg ? 'flex' : 'none';
+  el.textContent = msg;
+  if (msg && chart) { chart.remove(); chart = null; }
+}
+
+// ── Info bar ──────────────────────────────────────
+function updateIbar(lat, prev, isMinute = false) {
+  const chg = prev ? +lat.close - +prev.close : 0;
+  const pct = prev ? chg / +prev.close * 100 : 0;
+  const cls = chg >= 0 ? 'up' : 'dn';
+  const sgn = chg >= 0 ? '+' : '';
+  document.getElementById('ibar-price').textContent = (+lat.close).toFixed(1);
+  document.getElementById('ibar-price').className = cls;
+  set('iv-chg', `${sgn}${chg.toFixed(1)}`, cls);
+  set('iv-pct', `${sgn}${pct.toFixed(2)}%`, cls);
+  const hi = isMinute ? lat.max : lat.max;
+  const lo = isMinute ? lat.min : lat.min;
+  set('iv-hi', (+hi).toFixed(1));
+  set('iv-lo', (+lo).toFixed(1));
+  const vol = +(isMinute ? (lat.volume || 0) : (lat.Trading_Volume || 0));
+  set('iv-vol', vol > 1e6 ? `${(vol/1e6).toFixed(1)}M` : vol > 1e3 ? `${(vol/1e3).toFixed(0)}K` : String(vol));
+  set('iv-date', isMinute ? lat.date.substring(0, 16) : lat.date);
+}
+
+function set(id, val, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = val;
+  if (cls) el.className = `iv-v ${cls}`; else el.className = 'iv-v';
+}
+
+// ── Mobile tabs ───────────────────────────────────
+function showTab(tab) {
+  if (window.innerWidth >= 768) return;
+  document.getElementById('sb').classList.remove('mob-show');
+  document.getElementById('ai').classList.remove('mob-show');
+  if (tab !== 'main') document.getElementById(tab).classList.add('mob-show');
+  document.querySelectorAll('.mob-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  // Refit chart when switching back to chart tab
+  if (tab === 'main' && chart) {
+    const box = document.getElementById('cbox');
+    setTimeout(() => chart?.applyOptions({ width: box.clientWidth, height: box.clientHeight }), 50);
+  }
+}
+
+// ── AI Chat ───────────────────────────────────────
+async function send() {
+  const inp = document.getElementById('cinp');
+  const q = inp.value.trim();
+  if (!q) return;
+  inp.value = '';
+  addMsg('u', q);
+  const lid = addLoading();
+  document.getElementById('sbtn').disabled = true;
+  try {
+    const r = await fetch(`${API}/ai/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, stock_id: sel?.id||null, stock_name: sel?.name||null }),
+    });
+    const d = await r.json();
+    rmLoading(lid);
+    addMsg('a', d.answer || d.detail || '發生錯誤');
+  } catch {
+    rmLoading(lid);
+    addMsg('a', '無法連線到 AI，請確認伺服器正常。');
+  }
+  document.getElementById('sbtn').disabled = false;
+}
+
+function quick(q) { document.getElementById('cinp').value = q; send(); }
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `<div class="bbl">${role==='u'?esc(text):fmt(text)}</div><div class="mt">${role==='u'?now():`AI · ${now()}`}</div>`;
+  document.getElementById('msgs').appendChild(div);
+  document.getElementById('msgs').scrollTop = 9999;
+}
+function addLoading() {
+  const id = `ld-${++lctr}`;
+  const div = document.createElement('div');
+  div.className = 'msg a'; div.id = id;
+  div.innerHTML = `<div class="bbl"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+  document.getElementById('msgs').appendChild(div);
+  document.getElementById('msgs').scrollTop = 9999;
+  return id;
+}
+function rmLoading(id) { document.getElementById(id)?.remove(); }
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+function fmt(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/\n/g,'<br>');
+}
+function now() { return new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}); }
+function fmtDate(d) { return d.toISOString().split('T')[0]; }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+init();
+</script>
+</body>
+</html>
