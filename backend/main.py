@@ -55,7 +55,7 @@ AI_STOCKS = [
     {"id": "3324", "name": "雙鴻",     "category": "散熱"},
     {"id": "3338", "name": "泰碩",     "category": "散熱"},
     {"id": "2354", "name": "鴻準",     "category": "散熱"},
-    {"id": "6664", "name": "群翊",     "category": "散熱"},
+    {"id": "6664", "name": "群翊",     "category": "PCB"},
     # PCB／基板
     {"id": "3189", "name": "景碩",     "category": "PCB"},
     {"id": "3037", "name": "欣興",     "category": "PCB"},

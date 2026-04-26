@@ -201,20 +201,38 @@ body {
 .bl { font-size:8px; color:var(--tx2); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
 .bsub { font-size:10px; color:var(--tx2); white-space:nowrap; margin-top:4px; align-self:flex-start; }
 /* Valuation zone */
-.vz { display:flex; flex-direction:column; gap:5px; width:100%; padding-top:2px; }
-.vtrack { position:relative; height:10px; border-radius:5px;
-  background:linear-gradient(to right,#58a6ff66,#3fb95066,#f0ad4e66,#f8514966); }
-.vneedle { position:absolute; top:-3px; width:3px; height:16px; background:#fff;
-  border-radius:2px; transform:translateX(-50%); box-shadow:0 0 4px rgba(0,0,0,.5); }
+.vz { display:flex; flex-direction:column; gap:3px; width:100%; padding:2px 0; }
 .vpl { display:flex; justify-content:space-between; font-size:10px; font-weight:700; }
 .vpl span:nth-child(1){color:#58a6ff} .vpl span:nth-child(2){color:#3fb950}
 .vpl span:nth-child(3){color:#f0ad4e} .vpl span:nth-child(4){color:#f85149}
 .vll { display:flex; justify-content:space-between; font-size:8px; color:var(--tx2); }
-.vmeta { display:flex; gap:12px; flex-wrap:wrap; margin-top:4px; }
+.vmeta { display:flex; gap:10px; flex-wrap:wrap; margin-top:3px; }
 .vm { display:flex; flex-direction:column; }
 .vml { font-size:8px; color:var(--tx2); }
-.vmv { font-size:14px; font-weight:700; line-height:1.3; }
+.vmv { font-size:13px; font-weight:700; line-height:1.3; }
 .nd { display:flex; align-items:center; justify-content:center; height:100%; color:var(--tx2); font-size:12px; }
+/* Price-pin track */
+.vtk-wrap { position:relative; padding-top:38px; overflow:visible; }
+.vtk-pin {
+  position:absolute; top:0; transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center; pointer-events:none; z-index:5;
+}
+.vtk-lbl {
+  font-size:11px; font-weight:800; padding:2px 8px; border-radius:4px;
+  white-space:nowrap; line-height:1.5; background:rgba(25,25,25,.92);
+  border:1px solid rgba(255,255,255,.2);
+}
+.vtk-stem { width:2px; height:20px; background:rgba(255,255,255,.75); margin-top:2px; }
+.vtrack { height:12px; border-radius:6px; position:relative;
+  background:linear-gradient(to right,#58a6ff77,#3fb95077,#f0ad4e77,#f8514977); }
+.vtk-dot {
+  position:absolute; top:42px; width:10px; height:10px; background:white;
+  border-radius:50%; transform:translateX(-50%); z-index:4;
+  box-shadow:0 0 8px rgba(255,255,255,.8), 0 0 3px rgba(255,255,255,1);
+}
+/* Recommendation button */
+.cb-rec { background:rgba(88,166,255,.12) !important; border-color:var(--blu) !important; color:var(--blu) !important; }
+.cb-rec.on { background:var(--blu) !important; color:#fff !important; }
 
 @media (max-width: 767px) {
   #fund { height:195px; }
@@ -391,10 +409,15 @@ const API = location.hostname === 'localhost' || location.hostname === '127.0.0.
 
 let sel = null;
 let chart = null;
-let fullData = [];   // 2-year daily cache
+let fullData = [];
 let allStocks = [];
 let lctr = 0;
 let activeRangeBtn = null;
+
+const DEFAULT_IDS = ['2330','2308','2382','2317','1802','0050','00631L','3189','6664'];
+let priceCache = {};    // id → {close, chg, pct}
+let priceLoaded = new Set();
+let stockFundCache = {}; // id → {rev, fin, per}
 
 // ── Init ─────────────────────────────────────────
 async function init() {
@@ -402,8 +425,7 @@ async function init() {
     const r = await fetch(`${API}/stocks`);
     allStocks = await r.json();
     renderCats();
-    renderList(allStocks);
-    loadPrices(allStocks);
+    applyFilter();
   } catch {
     document.getElementById('slist').innerHTML =
       '<div style="padding:20px;text-align:center;color:var(--tx2)">無法連線伺服器</div>';
@@ -412,10 +434,12 @@ async function init() {
 
 // ── Stock list ────────────────────────────────────
 function renderCats() {
-  const cats = ['全部', ...new Set(allStocks.map(s => s.category))];
-  document.getElementById('cats').innerHTML = cats.map((c, i) =>
+  const cats = ['精選', '全部', ...new Set(allStocks.map(s => s.category))];
+  const btns = cats.map((c, i) =>
     `<button class="cb${i===0?' on':''}" onclick="filterCat('${c}',this)">${c}</button>`
-  ).join('');
+  );
+  btns.push(`<button class="cb cb-rec" onclick="filterCat('推薦名單',this)">⭐ 推薦</button>`);
+  document.getElementById('cats').innerHTML = btns.join('');
 }
 
 function renderList(stocks) {
@@ -430,27 +454,42 @@ function renderList(stocks) {
         <span class="si-c" id="sc-${s.id}">—</span>
       </div>
     </div>`).join('');
+  // Show cached prices immediately
+  for (const s of stocks) {
+    const p = priceCache[s.id];
+    if (!p) continue;
+    const pe = document.getElementById(`sp-${s.id}`);
+    const ce = document.getElementById(`sc-${s.id}`);
+    if (pe) { pe.textContent = p.close.toFixed(1); pe.className = `si-p ${p.chg>=0?'up':'dn'}`; }
+    if (ce) { ce.textContent = `${p.chg>=0?'+':''}${p.pct.toFixed(2)}%`; ce.className = `si-c ${p.chg>=0?'up':'dn'}`; }
+  }
 }
 
 async function loadPrices(stocks) {
   const end = fmtDate(new Date());
   const start = fmtDate(new Date(Date.now() - 10 * 864e5));
-  for (const s of stocks) {
-    try {
-      const r = await fetch(`${API}/stock/${s.id}/price?start_date=${start}&end_date=${end}`);
-      const data = await r.json();
-      if (data?.length) {
-        const lat = data[data.length - 1];
-        const prev = data.length > 1 ? data[data.length - 2] : null;
-        const chg = prev ? +lat.close - +prev.close : 0;
-        const pct = prev ? chg / +prev.close * 100 : 0;
-        const pe = document.getElementById(`sp-${s.id}`);
-        const ce = document.getElementById(`sc-${s.id}`);
-        if (pe) { pe.textContent = (+lat.close).toFixed(1); pe.className = `si-p ${chg>=0?'up':'dn'}`; }
-        if (ce) { ce.textContent = `${chg>=0?'+':''}${pct.toFixed(2)}%`; ce.className = `si-c ${chg>=0?'up':'dn'}`; }
-      }
-    } catch {}
-    await sleep(150);
+  const toLoad = stocks.filter(s => !priceLoaded.has(s.id));
+  const BATCH = 5;
+  for (let i = 0; i < toLoad.length; i += BATCH) {
+    await Promise.all(toLoad.slice(i, i + BATCH).map(async s => {
+      priceLoaded.add(s.id);
+      try {
+        const r = await fetch(`${API}/stock/${s.id}/price?start_date=${start}&end_date=${end}`);
+        const data = await r.json();
+        if (data?.length) {
+          const lat = data[data.length - 1];
+          const prev = data.length > 1 ? data[data.length - 2] : null;
+          const chg = prev ? +lat.close - +prev.close : 0;
+          const pct = prev ? chg / +prev.close * 100 : 0;
+          priceCache[s.id] = { close: +lat.close, chg, pct };
+          const pe = document.getElementById(`sp-${s.id}`);
+          const ce = document.getElementById(`sc-${s.id}`);
+          if (pe) { pe.textContent = (+lat.close).toFixed(1); pe.className = `si-p ${chg>=0?'up':'dn'}`; }
+          if (ce) { ce.textContent = `${chg>=0?'+':''}${pct.toFixed(2)}%`; ce.className = `si-c ${chg>=0?'up':'dn'}`; }
+        }
+      } catch {}
+    }));
+    if (i + BATCH < toLoad.length) await sleep(200);
   }
 }
 
@@ -464,11 +503,100 @@ document.getElementById('search').addEventListener('input', applyFilter);
 
 function applyFilter() {
   const q = document.getElementById('search').value.toLowerCase();
-  const cat = document.querySelector('.cb.on')?.textContent || '全部';
-  renderList(allStocks.filter(s =>
-    (cat === '全部' || s.category === cat) &&
-    (!q || s.name.includes(q) || s.id.includes(q) || s.category.includes(q))
-  ));
+  const cat = document.querySelector('.cb.on')?.textContent?.trim() || '精選';
+
+  if (cat === '推薦名單' && !q) { filterRecommended(); return; }
+
+  let stocks;
+  if (q) {
+    stocks = allStocks.filter(s => s.name.includes(q) || s.id.includes(q) || s.category.includes(q));
+  } else if (cat === '精選') {
+    stocks = allStocks.filter(s => DEFAULT_IDS.includes(s.id));
+  } else if (cat === '全部' || cat === '推薦名單') {
+    stocks = allStocks;
+  } else {
+    stocks = allStocks.filter(s => s.category === cat);
+  }
+  renderList(stocks);
+  loadPrices(stocks);
+}
+
+async function filterRecommended() {
+  const slist = document.getElementById('slist');
+  const nonETF = allStocks.filter(s => !s.category.startsWith('ETF'));
+  const end = fmtDate(new Date()), ps = fmtDate(new Date(Date.now() - 10 * 864e5));
+  const passed = []; let done = 0;
+
+  const upd = () => {
+    slist.innerHTML = `<div style="padding:16px 12px;color:var(--tx2);font-size:12px">
+      ⭐ 評估中… ${done}/${nonETF.length}<br>
+      <div style="margin-top:4px;height:3px;background:var(--bg3);border-radius:2px">
+        <div style="width:${Math.round(done/nonETF.length*100)}%;height:100%;background:var(--blu);border-radius:2px;transition:width .3s"></div>
+      </div>
+      <div style="margin-top:6px;color:var(--grn)">已找到 ${passed.length} 支 ✓</div>
+    </div>`;
+  };
+  upd();
+
+  const BATCH = 4;
+  for (let i = 0; i < nonETF.length; i += BATCH) {
+    await Promise.all(nonETF.slice(i, i + BATCH).map(async s => {
+      try {
+        if (!priceLoaded.has(s.id)) {
+          priceLoaded.add(s.id);
+          const pr = await fetch(`${API}/stock/${s.id}/price?start_date=${ps}&end_date=${end}`);
+          const pd = await pr.json();
+          if (pd?.length) {
+            const lat = pd[pd.length-1], prev = pd.length>1 ? pd[pd.length-2] : null;
+            const chg = prev ? +lat.close - +prev.close : 0;
+            priceCache[s.id] = { close: +lat.close, chg, pct: prev ? chg/+prev.close*100 : 0 };
+          }
+        }
+        if (!stockFundCache[s.id]) {
+          const [rev, fin, per] = await Promise.all([
+            fetch(`${API}/stock/${s.id}/revenue`).then(r=>r.json()).catch(()=>[]),
+            fetch(`${API}/stock/${s.id}/financials`).then(r=>r.json()).catch(()=>[]),
+            fetch(`${API}/stock/${s.id}/per`).then(r=>r.json()).catch(()=>[]),
+          ]);
+          stockFundCache[s.id] = { rev, fin, per };
+        }
+        const { rev, fin, per } = stockFundCache[s.id];
+        const price = priceCache[s.id]?.close;
+        // Criterion 1: latest revenue YoY > 0
+        let goodRev = false;
+        if (rev?.length) {
+          const sorted = [...rev].sort((a,b)=>a.date.localeCompare(b.date));
+          const lat = sorted[sorted.length-1];
+          const latD = new Date(lat.date);
+          const prev = sorted.find(r => { const d=new Date(r.date); return d.getFullYear()===latD.getFullYear()-1&&d.getMonth()===latD.getMonth(); });
+          if (prev) goodRev = +lat.revenue > +prev.revenue;
+        }
+        // Criterion 2: price ≤ 便宜價 (P/E 30th percentile × TTM EPS)
+        let cheap = false;
+        if (fin?.length && per?.length && price) {
+          const eps = fin.filter(r=>r.type==='EPS').sort((a,b)=>a.date.localeCompare(b.date));
+          if (eps.length >= 4) {
+            const ttm = eps.slice(-4).reduce((s,r)=>s + +r.value, 0);
+            const pers = per.filter(r=>+r.PER>0&&+r.PER<300).map(r=>+r.PER).sort((a,b)=>a-b);
+            if (pers.length) {
+              const pe30 = pers[Math.floor(0.30*pers.length)];
+              cheap = price <= pe30 * ttm;
+            }
+          }
+        }
+        if (goodRev && cheap) passed.push(s);
+      } catch {}
+      done++;
+      upd();
+    }));
+    if (i + BATCH < nonETF.length) await sleep(250);
+  }
+
+  if (!passed.length) {
+    slist.innerHTML = '<div style="padding:20px;text-align:center;color:var(--tx2);font-size:12px">目前無符合條件的推薦股票</div>';
+  } else {
+    renderList(passed);
+  }
 }
 
 // ── Select stock ──────────────────────────────────
@@ -763,11 +891,17 @@ async function loadFundamentals(id) {
   document.getElementById('fund').classList.add('show');
   document.getElementById('fund-body').innerHTML = '<div class="nd">載入財務資料中…</div>';
   try {
-    const [rev, fin, per] = await Promise.all([
-      fetch(`${API}/stock/${id}/revenue`).then(r => r.json()),
-      fetch(`${API}/stock/${id}/financials`).then(r => r.json()),
-      fetch(`${API}/stock/${id}/per`).then(r => r.json()),
-    ]);
+    let rev, fin, per;
+    if (stockFundCache[id]) {
+      ({ rev, fin, per } = stockFundCache[id]);
+    } else {
+      [rev, fin, per] = await Promise.all([
+        fetch(`${API}/stock/${id}/revenue`).then(r => r.json()),
+        fetch(`${API}/stock/${id}/financials`).then(r => r.json()),
+        fetch(`${API}/stock/${id}/per`).then(r => r.json()),
+      ]);
+      stockFundCache[id] = { rev, fin, per };
+    }
     fundData = { rev, fin, per };
     showFund(activeFundTab);
   } catch {
@@ -863,7 +997,11 @@ function renderValuation() {
   }
   const ttmEPS = epsRows.slice(-4).reduce((s, r) => s + +r.value, 0);
 
-  const pers = per.filter(r => +r.PER > 0 && +r.PER < 300).map(r => +r.PER).sort((a, b) => a - b);
+  // Use 3-year P/E history for more current calibration
+  const cut3y = fmtDate(new Date(Date.now() - 365*3*864e5));
+  const raw3y = per.filter(r => r.date >= cut3y && +r.PER > 0 && +r.PER < 300);
+  const pers = (raw3y.length >= 60 ? raw3y : per.filter(r => +r.PER > 0 && +r.PER < 300))
+    .map(r => +r.PER).sort((a, b) => a - b);
   if (!pers.length) {
     document.getElementById('fund-body').innerHTML = '<div class="nd">本益比資料不足</div>';
     return;
@@ -876,24 +1014,42 @@ function renderValuation() {
   const latPer = per[per.length - 1];
   const curPER = +latPer.PER;
   const divYield = +latPer.dividend_yield;
+  const pbr = +latPer.PBR;
 
-  const needlePct = zones[3] > zones[0]
-    ? Math.min(98, Math.max(2, (curPrice - zones[0]) / (zones[3] - zones[0]) * 100))
+  // Zone label
+  const [zoneName, zoneColor] =
+    curPrice < zones[0] ? ['極低估', '#58a6ff'] :
+    curPrice < zones[1] ? ['低估',   '#3fb950'] :
+    curPrice < zones[2] ? ['合理偏低','#3fb950'] :
+    curPrice < zones[3] ? ['合理偏高','#f0ad4e'] :
+                          ['偏高',   '#f85149'];
+
+  const pct = zones[3] > zones[0]
+    ? Math.min(96, Math.max(4, (curPrice - zones[0]) / (zones[3] - zones[0]) * 100))
     : 50;
 
-  // P/S ratio
+  // PEG = current P/E ÷ TTM EPS YoY growth rate
+  let pegHtml = '';
+  if (epsRows.length >= 8 && curPER > 0) {
+    const prevTTM = epsRows.slice(-8, -4).reduce((s, r) => s + +r.value, 0);
+    if (prevTTM > 0 && ttmEPS > prevTTM) {
+      const growth = (ttmEPS - prevTTM) / prevTTM * 100;
+      const peg = curPER / growth;
+      const pegCls = peg < 1 ? 'up' : peg < 2 ? '' : 'dn';
+      pegHtml = `<div class="vm"><div class="vml">PEG (EPS+${growth.toFixed(0)}%)</div><div class="vmv ${pegCls}">${peg.toFixed(2)}</div></div>`;
+    }
+  }
+
+  // P/S via quarterly Revenue & IncomeAfterTaxes
   let psHtml = '';
-  const revRows = fin.filter(r => r.type === 'Revenue').sort((a, b) => a.date.localeCompare(b.date)).slice(-4);
-  const niRows  = fin.filter(r => r.type === 'IncomeAfterTaxes').sort((a, b) => a.date.localeCompare(b.date)).slice(-4);
-  if (revRows.length >= 4 && niRows.length >= 4 && ttmEPS !== 0) {
-    const ttmRev = revRows.reduce((s, r) => s + +r.value, 0);
-    const ttmNI  = niRows.reduce((s, r) => s + +r.value, 0);
+  const revR = fin.filter(r => r.type === 'Revenue').sort((a,b) => a.date.localeCompare(b.date)).slice(-4);
+  const niR  = fin.filter(r => r.type === 'IncomeAfterTaxes').sort((a,b) => a.date.localeCompare(b.date)).slice(-4);
+  if (revR.length >= 4 && niR.length >= 4 && ttmEPS !== 0) {
+    const ttmRev = revR.reduce((s, r) => s + +r.value, 0);
+    const ttmNI  = niR.reduce((s, r) => s + +r.value, 0);
     if (ttmNI !== 0 && ttmRev !== 0) {
-      const revPerShare = ttmRev * ttmEPS / ttmNI;
-      if (revPerShare > 0) {
-        const ps = curPrice / revPerShare;
-        psHtml = `<div class="vm"><div class="vml">股價/營收(P/S)</div><div class="vmv">${ps.toFixed(2)}x</div></div>`;
-      }
+      const rps = ttmRev * ttmEPS / ttmNI;
+      if (rps > 0) psHtml = `<div class="vm"><div class="vml">P/S 股價/營收</div><div class="vmv">${(curPrice/rps).toFixed(2)}x</div></div>`;
     }
   }
 
@@ -904,17 +1060,24 @@ function renderValuation() {
         <span>特價 ${f(zones[0])}</span><span>便宜 ${f(zones[1])}</span>
         <span>合理 ${f(zones[2])}</span><span>昂貴 ${f(zones[3])}</span>
       </div>
-      <div class="vtrack"><div class="vneedle" style="left:${needlePct}%"></div></div>
+      <div class="vtk-wrap">
+        <div class="vtk-pin" style="left:${pct.toFixed(1)}%">
+          <span class="vtk-lbl" style="color:${zoneColor}">${curPrice.toFixed(1)}&nbsp;<em style="font-style:normal;font-size:9px;opacity:.85">${zoneName}</em></span>
+          <div class="vtk-stem"></div>
+        </div>
+        <div class="vtk-dot" style="left:${pct.toFixed(1)}%"></div>
+        <div class="vtrack"></div>
+      </div>
       <div class="vll">
         <span>P/E ${pe15.toFixed(0)}x</span><span>P/E ${pe30.toFixed(0)}x</span>
         <span>P/E ${pe50.toFixed(0)}x</span><span>P/E ${pe80.toFixed(0)}x</span>
       </div>
       <div class="vmeta">
         <div class="vm"><div class="vml">TTM EPS</div><div class="vmv">${ttmEPS.toFixed(2)}</div></div>
-        <div class="vm"><div class="vml">現在股價</div><div class="vmv ${curPrice >= zones[2] ? 'dn' : 'up'}">${curPrice.toFixed(1)}</div></div>
-        <div class="vm"><div class="vml">本益比</div><div class="vmv">${curPER > 0 ? curPER.toFixed(1)+'x' : '—'}</div></div>
+        <div class="vm"><div class="vml">本益比(P/E)</div><div class="vmv">${curPER > 0 ? curPER.toFixed(1)+'x' : '—'}</div></div>
+        ${pbr > 0 ? `<div class="vm"><div class="vml">股價淨值比(P/B)</div><div class="vmv">${pbr.toFixed(2)}x</div></div>` : ''}
         ${divYield > 0 ? `<div class="vm"><div class="vml">殖利率</div><div class="vmv">${divYield.toFixed(2)}%</div></div>` : ''}
-        ${psHtml}
+        ${pegHtml}${psHtml}
       </div>
     </div>`;
 }
