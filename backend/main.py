@@ -46,18 +46,18 @@ AI_STOCKS = [
     {"id": "3034", "name": "聯詠",     "category": "IC設計"},
     {"id": "3529", "name": "力旺",     "category": "IP設計"},
     {"id": "6533", "name": "晶心科",   "category": "AI晶片IP"},
-    {"id": "2345", "name": "委訊",     "category": "AI網路"},
+    {"id": "2345", "name": "智邦",     "category": "AI網路"},
     {"id": "8299", "name": "群聯",     "category": "儲存IC"},
     {"id": "2303", "name": "聯電",     "category": "晶片製造"},
     {"id": "2308", "name": "台達電",   "category": "電源供應"},
     {"id": "3706", "name": "神達",     "category": "AI伺服器"},
     # 散熱
-    {"id": "3008", "name": "雙鴻",     "category": "散熱"},
+    {"id": "3324", "name": "雙鴻",     "category": "散熱"},
     {"id": "3338", "name": "泰碩",     "category": "散熱"},
     {"id": "2354", "name": "鴻準",     "category": "散熱"},
     {"id": "6664", "name": "群翊",     "category": "散熱"},
     # PCB／基板
-    {"id": "3131", "name": "景碩",     "category": "PCB"},
+    {"id": "3189", "name": "景碩",     "category": "PCB"},
     {"id": "3037", "name": "欣興",     "category": "PCB"},
     {"id": "8046", "name": "南電",     "category": "PCB"},
     {"id": "3044", "name": "健鼎",     "category": "PCB"},
@@ -68,7 +68,7 @@ AI_STOCKS = [
     {"id": "6274", "name": "台燿",     "category": "PCB材料"},
     {"id": "1802", "name": "台玻",     "category": "PCB材料"},
     # 連接器
-    {"id": "4971", "name": "華東科技", "category": "連接器"},
+    {"id": "8110", "name": "華東",     "category": "連接器"},
     {"id": "3533", "name": "嘉澤",     "category": "連接器"},
     {"id": "2392", "name": "正崴",     "category": "連接器"},
     # ETF 配息型
