@@ -191,11 +191,11 @@ body {
 }
 #fund-body::-webkit-scrollbar { height:3px; }
 #fund-body::-webkit-scrollbar-thumb { background:var(--bd); border-radius:2px; }
-.find { display:flex; gap:5px; height:100%; min-width:max-content; }
+.find { display:flex; gap:5px; height:100%; min-width:max-content; align-items:flex-end; }
 .bc { display:flex; flex-direction:column; align-items:center; gap:1px; width:36px; }
 .bv { font-size:8px; color:var(--tx); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
 .by { font-size:8px; text-align:center; white-space:nowrap; line-height:1.2; }
-.bw { height:74px; display:flex; align-items:flex-end; width:100%; }
+.bw { height:74px; display:flex; align-items:flex-end; width:100%; border-bottom:1px solid rgba(255,255,255,.15); }
 .br { width:100%; border-radius:2px 2px 0 0; }
 .br.pos { background:#3fb95088; } .br.neg { background:#f8514988; }
 .bl { font-size:8px; color:var(--tx2); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
@@ -230,9 +230,22 @@ body {
   border-radius:50%; transform:translateX(-50%); z-index:4;
   box-shadow:0 0 8px rgba(255,255,255,.8), 0 0 3px rgba(255,255,255,1);
 }
-/* Recommendation button */
-.cb-rec { background:rgba(88,166,255,.12) !important; border-color:var(--blu) !important; color:var(--blu) !important; }
+/* Recommendation / screen buttons */
+.cb-rec  { background:rgba(88,166,255,.12) !important; border-color:var(--blu) !important; color:var(--blu) !important; }
 .cb-rec.on { background:var(--blu) !important; color:#fff !important; }
+.cb-scr  { background:rgba(240,173,78,.12) !important; border-color:#f0ad4e !important; color:#f0ad4e !important; }
+.cb-scr.on { background:#f0ad4e !important; color:#0d1117 !important; }
+/* Fund panel expand */
+#fund.expanded { height:440px; }
+#fund-exp { margin-left:auto; font-size:13px; padding:4px 8px; opacity:.6; }
+#fund-exp:hover { opacity:1; }
+/* Zone badge in ibar */
+#ibar-zone { display:none; }
+.zone-tag {
+  font-size:11px; font-weight:800; padding:2px 9px; border-radius:4px;
+  white-space:nowrap; line-height:1.6; background:rgba(20,20,20,.85);
+  border:1px solid currentColor;
+}
 
 @media (max-width: 767px) {
   #fund { height:195px; }
@@ -297,6 +310,7 @@ body {
           <div id="ibar-sid">-</div>
         </div>
         <div id="ibar-price">-</div>
+        <div id="ibar-zone"><span id="ibar-zone-tag" class="zone-tag">—</span></div>
         <div class="iv"><div class="il">漲跌</div><div class="iv-v" id="iv-chg">-</div></div>
         <div class="iv"><div class="il">漲跌幅</div><div class="iv-v" id="iv-pct">-</div></div>
         <div class="iv"><div class="il">最高</div><div class="iv-v" id="iv-hi">-</div></div>
@@ -334,6 +348,7 @@ body {
           <button class="ft on" data-tab="rev" onclick="showFund('rev')">月營收</button>
           <button class="ft" data-tab="eps" onclick="showFund('eps')">EPS 季報</button>
           <button class="ft" data-tab="val" onclick="showFund('val')">估值分析</button>
+          <button class="ft" id="fund-exp" onclick="toggleFund()" title="展開 / 收合">⤢</button>
         </div>
         <div id="fund-body"><div class="nd">載入中…</div></div>
       </div>
@@ -439,6 +454,7 @@ function renderCats() {
     `<button class="cb${i===0?' on':''}" onclick="filterCat('${c}',this)">${c}</button>`
   );
   btns.push(`<button class="cb cb-rec" onclick="filterCat('推薦名單',this)">⭐ 推薦</button>`);
+  btns.push(`<button class="cb cb-scr" id="btn-scr" onclick="showGlobalScreen(this)">🔍 全市場精選</button>`);
   document.getElementById('cats').innerHTML = btns.join('');
 }
 
@@ -611,8 +627,9 @@ async function pickStock(id, name) {
   document.getElementById('ibar-sname').textContent = name;
   document.getElementById('ibar-sid').textContent = id;
 
-  // Clear old % badges and reset fund panel
+  // Clear old % badges, zone badge, reset fund panel
   document.querySelectorAll('.rp').forEach(el => { el.textContent = '—'; el.className = 'rp'; });
+  document.getElementById('ibar-zone').style.display = 'none';
   document.getElementById('fund').classList.remove('show');
   fundData = { rev: null, fin: null, per: null };
 
@@ -883,6 +900,63 @@ function now() { return new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',mi
 function fmtDate(d) { return d.toISOString().split('T')[0]; }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// ── Fund panel expand ─────────────────────────────
+let fundExpanded = false;
+function toggleFund() {
+  fundExpanded = !fundExpanded;
+  document.getElementById('fund').classList.toggle('expanded', fundExpanded);
+  document.getElementById('fund-exp').textContent = fundExpanded ? '⤡' : '⤢';
+  if (chart) {
+    const box = document.getElementById('cbox');
+    setTimeout(() => chart?.applyOptions({ width: box.clientWidth, height: box.clientHeight }), 60);
+  }
+}
+
+// ── Global market screener ────────────────────────
+async function showGlobalScreen(btn) {
+  document.querySelectorAll('.cb').forEach(b => b.classList.remove('on'));
+  btn?.classList.add('on');
+  const slist = document.getElementById('slist');
+  slist.innerHTML = `<div style="padding:16px 12px;color:var(--tx2);font-size:12px;line-height:1.8">
+    🔍 掃描全市場估值中…<br>
+    <small>分析上百檔股票，約需 15-30 秒</small><br>
+    <div style="margin-top:6px;height:3px;background:var(--bg3);border-radius:2px">
+      <div id="scr-bar" style="width:5%;height:100%;background:#f0ad4e;border-radius:2px;transition:width .5s"></div>
+    </div>
+  </div>`;
+
+  const prog = p => { const b = document.getElementById('scr-bar'); if (b) b.style.width = p + '%'; };
+
+  try {
+    prog(15);
+    const r = await fetch(`${API}/screen`);
+    prog(90);
+    const data = await r.json();
+    prog(100);
+
+    if (!data?.length) {
+      slist.innerHTML = '<div style="padding:20px;text-align:center;color:var(--tx2)">目前未找到符合條件的股票</div>';
+      return;
+    }
+    const zc = { '特價':'#58a6ff','便宜':'#3fb950','合理':'#f0ad4e' };
+    slist.innerHTML = `
+      <div style="padding:6px 12px 4px;font-size:10px;color:var(--tx2)">全市場精選 · 共 ${data.length} 檔</div>
+      ${data.map(s => `
+        <div class="si${sel?.id===s.id?' on':''}" onclick="pickStock('${s.id}','${s.name}')">
+          <div class="si-row">
+            <span class="si-name">${s.name}</span>
+            <span style="font-size:10px;font-weight:800;color:${zc[s.zone]||'#8b949e'};padding:1px 6px;border:1px solid currentColor;border-radius:3px">${s.zone}</span>
+          </div>
+          <div class="si-row">
+            <span class="si-id">${s.id} · P/E ${s.per}x · 殖利率${s.dy}%</span>
+            <span class="si-c up">合理≤${s.fair_price}</span>
+          </div>
+        </div>`).join('')}`;
+  } catch(e) {
+    slist.innerHTML = '<div style="padding:20px;text-align:center;color:var(--tx2);font-size:12px">掃描失敗，請稍後再試<br><small>' + e.message + '</small></div>';
+  }
+}
+
 // ── Financial Panel ──────────────────────────────
 let fundData = { rev: null, fin: null, per: null };
 let activeFundTab = 'rev';
@@ -1023,6 +1097,11 @@ function renderValuation() {
     curPrice < zones[2] ? ['合理偏低','#3fb950'] :
     curPrice < zones[3] ? ['合理偏高','#f0ad4e'] :
                           ['偏高',   '#f85149'];
+
+  // Push zone to info bar
+  const zt = document.getElementById('ibar-zone-tag');
+  const zw = document.getElementById('ibar-zone');
+  if (zt && zw) { zt.textContent = zoneName; zt.style.color = zoneColor; zw.style.display = ''; }
 
   const pct = zones[3] > zones[0]
     ? Math.min(96, Math.max(4, (curPrice - zones[0]) / (zones[3] - zones[0]) * 100))

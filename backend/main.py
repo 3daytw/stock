@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 import anthropic
+import asyncio
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -205,6 +206,170 @@ async def ai_query(req: QueryRequest):
         return {"answer": message.content[0].text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI query failed: {str(e)}")
+
+
+BROAD_SCREEN_STOCKS = [
+    # 金融
+    {"id":"2882","name":"國泰金"},{"id":"2886","name":"兆豐金"},{"id":"2884","name":"玉山金"},
+    {"id":"2891","name":"中信金"},{"id":"2892","name":"第一金"},{"id":"2881","name":"富邦金"},
+    {"id":"2885","name":"元大金"},{"id":"2887","name":"台新金"},{"id":"2890","name":"永豐金"},
+    {"id":"5876","name":"上海商銀"},{"id":"5880","name":"合庫金"},{"id":"2883","name":"開發金"},
+    {"id":"2801","name":"彰銀"},{"id":"2809","name":"京城銀"},
+    # 電信
+    {"id":"2412","name":"中華電"},{"id":"4904","name":"遠傳"},{"id":"3045","name":"台灣大"},
+    # 石化
+    {"id":"1301","name":"台塑"},{"id":"1303","name":"南亞"},{"id":"1326","name":"台化"},
+    {"id":"6505","name":"台塑化"},
+    # 鋼鐵
+    {"id":"2002","name":"中鋼"},{"id":"2006","name":"東和鋼鐵"},{"id":"2015","name":"豐興"},
+    # 食品/零售
+    {"id":"1216","name":"統一"},{"id":"2912","name":"統一超"},{"id":"1210","name":"大成"},
+    {"id":"1234","name":"黑松"},{"id":"2915","name":"潤泰全"},
+    # 紡織/化工
+    {"id":"1402","name":"遠東新"},{"id":"1434","name":"福懋"},{"id":"1717","name":"長興"},
+    # 製造/工業
+    {"id":"1504","name":"東元"},{"id":"9933","name":"中鼎"},{"id":"9910","name":"豐泰"},
+    {"id":"9914","name":"美利達"},{"id":"1605","name":"華新"},
+    # 汽車
+    {"id":"2207","name":"和泰車"},{"id":"2227","name":"裕日車"},{"id":"2201","name":"裕隆"},
+    # 航運
+    {"id":"2603","name":"長榮"},{"id":"2615","name":"萬海"},{"id":"2609","name":"陽明"},
+    {"id":"2610","name":"華航"},{"id":"2618","name":"長榮航"},
+    # 建設
+    {"id":"2520","name":"冠德"},{"id":"5522","name":"遠雄"},{"id":"2501","name":"國建"},
+    # 其他科技
+    {"id":"2353","name":"宏碁"},{"id":"2352","name":"佳世達"},{"id":"2347","name":"聯強"},
+    {"id":"2360","name":"致茂"},{"id":"3711","name":"日月光投控"},{"id":"2049","name":"上銀"},
+    {"id":"4938","name":"和碩"},{"id":"2474","name":"可成"},{"id":"2327","name":"國巨"},
+    {"id":"3008","name":"大立光"},{"id":"2388","name":"威盛"},{"id":"6415","name":"矽力-KY"},
+    {"id":"2449","name":"京元電子"},{"id":"6669","name":"緯穎"},{"id":"3231","name":"緯創"},
+]
+
+@app.get("/api/screen")
+async def screen_stocks():
+    """Scan broad market for value stocks in 特價/便宜/合理 zones."""
+    today = datetime.now()
+    end_str   = today.strftime("%Y-%m-%d")
+    per_start = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+    eps_start = (today - timedelta(days=760)).strftime("%Y-%m-%d")
+    p3y_start = (today - timedelta(days=365*3)).strftime("%Y-%m-%d")
+
+    # Build deduplicated screen list (exclude ETFs already in AI_STOCKS)
+    seen: set[str] = set()
+    screen_list = []
+    for s in BROAD_SCREEN_STOCKS + [
+        x for x in AI_STOCKS if not x["category"].startswith("ETF")
+    ]:
+        if s["id"] not in seen:
+            seen.add(s["id"])
+            screen_list.append(s)
+
+    async with httpx.AsyncClient(timeout=25) as client:
+
+        # ── Phase 1: fetch latest P/E for all candidates (batches of 10) ──
+        async def _get_cur_per(sid: str):
+            try:
+                r = await client.get(FINMIND_API, params={
+                    "dataset": "TaiwanStockPER", "data_id": sid,
+                    "start_date": per_start, "end_date": end_str,
+                    "token": FINMIND_TOKEN,
+                })
+                rows = r.json().get("data", [])
+                return sid, rows[-1] if rows else None
+            except Exception:
+                return sid, None
+
+        per_map: dict = {}
+        for i in range(0, len(screen_list), 10):
+            batch = screen_list[i:i + 10]
+            results = await asyncio.gather(*[_get_cur_per(s["id"]) for s in batch])
+            for sid, row in results:
+                if row:
+                    per_map[sid] = row
+            await asyncio.sleep(0.25)
+
+        # ── Filter: reasonable P/E + positive yield ──
+        candidates = [
+            s for s in screen_list
+            if s["id"] in per_map
+            and 3 < float(per_map[s["id"]].get("PER") or 0) < 25
+            and float(per_map[s["id"]].get("dividend_yield") or 0) > 0
+        ]
+
+        # ── Phase 2: fetch EPS + 3yr PER history for candidates ──
+        async def _get_eps_per(sid: str):
+            try:
+                eps_r, p3_r = await asyncio.gather(
+                    client.get(FINMIND_API, params={
+                        "dataset": "TaiwanStockFinancialStatements",
+                        "data_id": sid, "start_date": eps_start,
+                        "end_date": end_str, "token": FINMIND_TOKEN,
+                    }),
+                    client.get(FINMIND_API, params={
+                        "dataset": "TaiwanStockPER",
+                        "data_id": sid, "start_date": p3y_start,
+                        "end_date": end_str, "token": FINMIND_TOKEN,
+                    }),
+                )
+                eps_rows = [x for x in eps_r.json().get("data", []) if x.get("type") == "EPS"]
+                per_hist = p3_r.json().get("data", [])
+                return sid, eps_rows, per_hist
+            except Exception:
+                return sid, [], []
+
+        scored = []
+        name_map = {s["id"]: s["name"] for s in screen_list}
+
+        for i in range(0, len(candidates), 5):
+            batch = candidates[i:i + 5]
+            results = await asyncio.gather(*[_get_eps_per(s["id"]) for s in batch])
+            for s, (sid, eps_list, per_hist) in zip(batch, results):
+                try:
+                    eps_sorted = sorted(eps_list, key=lambda x: x["date"])
+                    if len(eps_sorted) < 4:
+                        continue
+                    ttm = sum(float(e["value"]) for e in eps_sorted[-4:])
+                    if ttm <= 0:
+                        continue
+                    valid_pers = sorted([
+                        float(x["PER"]) for x in per_hist
+                        if 0 < float(x.get("PER") or 0) < 300
+                    ])
+                    if len(valid_pers) < 20:
+                        continue
+                    n = len(valid_pers)
+                    pe15 = valid_pers[int(n * 0.15)]
+                    pe30 = valid_pers[int(n * 0.30)]
+                    pe50 = valid_pers[int(n * 0.50)]
+                    pe80 = valid_pers[int(n * 0.80)]
+                    cur_per = float(per_map[sid].get("PER") or 0)
+                    if cur_per <= pe15:
+                        zone = "特價"
+                    elif cur_per <= pe30:
+                        zone = "便宜"
+                    elif cur_per <= pe50:
+                        zone = "合理"
+                    else:
+                        continue  # above fair value — skip
+                    scored.append({
+                        "id": sid,
+                        "name": name_map.get(sid, sid),
+                        "zone": zone,
+                        "per": round(cur_per, 1),
+                        "ttm_eps": round(ttm, 2),
+                        "dy": round(float(per_map[sid].get("dividend_yield") or 0), 2),
+                        "pbr": round(float(per_map[sid].get("PBR") or 0), 2),
+                        "cheap_price": round(pe30 * ttm, 1),
+                        "fair_price":  round(pe50 * ttm, 1),
+                        "exp_price":   round(pe80 * ttm, 1),
+                    })
+                except Exception:
+                    pass
+            await asyncio.sleep(0.25)
+
+    zone_order = {"特價": 0, "便宜": 1, "合理": 2}
+    scored.sort(key=lambda x: (zone_order.get(x["zone"], 9), -x.get("dy", 0)))
+    return scored[:20]
 
 
 @app.get("/api/stock/{stock_id}/revenue")
