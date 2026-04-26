@@ -78,11 +78,11 @@ AI_STOCKS = [
     {"id": "00929",  "name": "復華台灣科技優息", "category": "ETF配息"},
     {"id": "00940",  "name": "元大台灣價值高息", "category": "ETF配息"},
     # ETF 主動型
-    {"id": "00981A", "name": "00981A", "category": "ETF主動"},
-    {"id": "00982A", "name": "00982A", "category": "ETF主動"},
-    {"id": "00985A", "name": "00985A", "category": "ETF主動"},
-    {"id": "00992A", "name": "00992A", "category": "ETF主動"},
-    {"id": "00994A", "name": "00994A", "category": "ETF主動"},
+    {"id": "00981A", "name": "統一台股增長",     "category": "ETF主動"},
+    {"id": "00982A", "name": "凱基台灣優選成長", "category": "ETF主動"},
+    {"id": "00985A", "name": "元大台灣卓越成長", "category": "ETF主動"},
+    {"id": "00992A", "name": "富邦台灣核心競爭力","category": "ETF主動"},
+    {"id": "00994A", "name": "國泰台灣大數據",   "category": "ETF主動"},
     # ETF 指數型
     {"id": "0050",   "name": "元大台灣50",   "category": "ETF指數"},
     {"id": "00631L", "name": "元大台灣50正2", "category": "ETF指數"},
