@@ -521,14 +521,14 @@ function applyFilter() {
   const q = document.getElementById('search').value.toLowerCase();
   const cat = document.querySelector('.cb.on')?.textContent?.trim() || '精選';
 
-  if (cat === '推薦名單' && !q) { filterRecommended(); return; }
+  if (cat.includes('推薦') && !q) { filterRecommended(); return; }
 
   let stocks;
   if (q) {
     stocks = allStocks.filter(s => s.name.includes(q) || s.id.includes(q) || s.category.includes(q));
   } else if (cat === '精選') {
     stocks = allStocks.filter(s => DEFAULT_IDS.includes(s.id));
-  } else if (cat === '全部' || cat === '推薦名單') {
+  } else if (cat === '全部' || cat.includes('推薦')) {
     stocks = allStocks;
   } else {
     stocks = allStocks.filter(s => s.category === cat);
@@ -1101,7 +1101,7 @@ function renderValuation() {
   // Push zone to info bar
   const zt = document.getElementById('ibar-zone-tag');
   const zw = document.getElementById('ibar-zone');
-  if (zt && zw) { zt.textContent = zoneName; zt.style.color = zoneColor; zw.style.display = ''; }
+  if (zt && zw) { zt.textContent = zoneName; zt.style.color = zoneColor; zt.style.borderColor = zoneColor; zw.style.display = 'block'; }
 
   const pct = zones[3] > zones[0]
     ? Math.min(96, Math.max(4, (curPrice - zones[0]) / (zones[3] - zones[0]) * 100))
