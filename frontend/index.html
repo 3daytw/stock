@@ -176,35 +176,35 @@ body {
 #fund {
   display:none; flex-direction:column; background:var(--bg2);
   border:1px solid var(--bd); border-radius:8px; flex-shrink:0;
-  height:260px; overflow:hidden;
+  height:300px; overflow:hidden;
 }
 #fund.show { display:flex; }
 #fund-tabs {
-  display:flex; border-bottom:1px solid var(--bd); flex-shrink:0;
-  padding:0 8px; background:var(--bg3); border-radius:8px 8px 0 0;
-  gap:2px;
+  display:flex; border-bottom:2px solid var(--bd); flex-shrink:0;
+  padding:0 10px; background:var(--bg3); border-radius:8px 8px 0 0;
+  gap:2px; align-items:center;
 }
 .ft {
-  padding:9px 14px; font-size:12px; font-weight:600; color:var(--tx2); cursor:pointer;
-  border:none; background:none; border-bottom:2px solid transparent;
+  padding:10px 16px; font-size:13px; font-weight:600; color:var(--tx2); cursor:pointer;
+  border:none; background:none; border-bottom:3px solid transparent; margin-bottom:-2px;
   transition:all .15s; white-space:nowrap;
 }
 .ft:hover { color:var(--tx); }
 .ft.on { color:var(--blu); border-bottom-color:var(--blu); }
 #fund-body {
-  flex:1; overflow-x:auto; overflow-y:hidden; padding:8px 12px; min-height:0;
+  flex:1; overflow-x:auto; overflow-y:hidden; padding:10px 14px; min-height:0;
 }
-#fund-body::-webkit-scrollbar { height:3px; }
+#fund-body::-webkit-scrollbar { height:4px; }
 #fund-body::-webkit-scrollbar-thumb { background:var(--bd); border-radius:2px; }
-.find { display:flex; gap:6px; height:100%; min-width:max-content; align-items:flex-end; }
-.bc { display:flex; flex-direction:column; align-items:center; gap:2px; width:42px; }
-.bv { font-size:9px; color:var(--tx); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
-.by { font-size:9px; text-align:center; white-space:nowrap; line-height:1.2; }
-.bw { height:90px; display:flex; align-items:flex-end; width:100%; border-bottom:1px solid rgba(255,255,255,.15); }
-.br { width:100%; border-radius:2px 2px 0 0; }
-.br.pos { background:#3fb95088; } .br.neg { background:#f8514988; }
-.bl { font-size:9px; color:var(--tx2); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
-.bsub { font-size:11px; color:var(--tx2); white-space:nowrap; margin-top:4px; align-self:flex-start; }
+.find { display:flex; gap:8px; height:100%; min-width:max-content; align-items:flex-end; }
+.bc { display:flex; flex-direction:column; align-items:center; gap:3px; width:50px; }
+.bv { font-size:10px; color:var(--tx); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
+.by { font-size:10px; text-align:center; white-space:nowrap; line-height:1.2; }
+.bw { height:110px; display:flex; align-items:flex-end; width:100%; border-bottom:1px solid rgba(255,255,255,.2); }
+.br { width:100%; border-radius:3px 3px 0 0; }
+.br.pos { background:#3fb95099; } .br.neg { background:#f8514999; }
+.bl { font-size:10px; color:var(--tx2); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
+.bsub { font-size:11px; color:var(--tx2); white-space:nowrap; margin-top:6px; align-self:flex-start; }
 /* Valuation zone */
 .vz { display:flex; flex-direction:column; gap:3px; width:100%; padding:2px 0; }
 .vpl { display:flex; justify-content:space-between; font-size:10px; font-weight:700; }
@@ -239,9 +239,9 @@ body {
 .cb-rec  { background:rgba(88,166,255,.12) !important; border-color:var(--blu) !important; color:var(--blu) !important; }
 .cb-rec.on { background:var(--blu) !important; color:#fff !important; }
 /* Fund panel expand */
-#fund.expanded { height:480px; }
-#fund-exp { margin-left:auto; font-size:11px; font-weight:600; padding:5px 10px; opacity:.55; color:var(--tx2); }
-#fund-exp:hover { opacity:1; color:var(--blu); }
+#fund.expanded { height:520px; }
+#fund-exp { margin-left:auto; font-size:11px; font-weight:600; padding:5px 10px; opacity:.6; color:var(--tx2); border-radius:4px; }
+#fund-exp:hover { opacity:1; color:var(--blu); background:rgba(88,166,255,.1); }
 /* Zone badge in ibar */
 #ibar-zone { display:none; }
 .zone-tag {
@@ -251,7 +251,7 @@ body {
 }
 
 @media (max-width: 767px) {
-  #fund { height:230px; }
+  #fund { height:260px; }
 }
 
 @media (max-width: 767px) {
@@ -972,7 +972,7 @@ function renderRevenue() {
       return pd.getFullYear() === rDate.getFullYear() - 1 && pd.getMonth() === rDate.getMonth();
     });
     const yoy = prevRow ? (+r.revenue - +prevRow.revenue) / +prevRow.revenue * 100 : null;
-    const h = Math.max(2, Math.round(+r.revenue / maxRev * 86));
+    const h = Math.max(2, Math.round(+r.revenue / maxRev * 106));
     const revB = (+r.revenue / 1e8).toFixed(1);
     const lbl = r.date.slice(0, 7).replace('-', '/');
     return `<div class="bc">
@@ -1003,7 +1003,7 @@ function renderEPS() {
       return pd.getFullYear() === rd.getFullYear() - 1 && Math.abs(pd.getMonth() - rd.getMonth()) <= 1;
     });
     const yoy = prev && +prev.value !== 0 ? (v - +prev.value) / Math.abs(+prev.value) * 100 : null;
-    const h = maxAbs > 0 ? Math.max(2, Math.round(Math.abs(v) / maxAbs * 86)) : 2;
+    const h = maxAbs > 0 ? Math.max(2, Math.round(Math.abs(v) / maxAbs * 106)) : 2;
     const lbl = r.date.slice(0, 7).replace('-', '/');
     return `<div class="bc">
       <div class="bv">${v.toFixed(2)}</div>
@@ -1029,6 +1029,16 @@ function renderValuation() {
   }
   const ttmEPS = epsRows.slice(-4).reduce((s, r) => s + +r.value, 0);
 
+  // Guard: EPS must be positive for P/E valuation to make sense
+  if (ttmEPS <= 0) {
+    document.getElementById('fund-body').innerHTML =
+      `<div class="nd" style="flex-direction:column;gap:6px">
+        <span>TTM EPS = ${ttmEPS.toFixed(2)}（虧損中）</span>
+        <span style="font-size:11px;color:var(--tx2)">EPS 為負時無法使用本益比估值</span>
+      </div>`;
+    return;
+  }
+
   // Use 3-year P/E history for more current calibration
   const cut3y = fmtDate(new Date(Date.now() - 365*3*864e5));
   const raw3y = per.filter(r => r.date >= cut3y && +r.PER > 0 && +r.PER < 300);
@@ -1048,13 +1058,13 @@ function renderValuation() {
   const divYield = +latPer.dividend_yield;
   const pbr = +latPer.PBR;
 
-  // Zone label
+  // Zone label — names match the track markers (特價/便宜/合理/偏高/昂貴)
   const [zoneName, zoneColor] =
-    curPrice < zones[0] ? ['極低估', '#58a6ff'] :
-    curPrice < zones[1] ? ['低估',   '#3fb950'] :
-    curPrice < zones[2] ? ['合理偏低','#3fb950'] :
-    curPrice < zones[3] ? ['合理偏高','#f0ad4e'] :
-                          ['偏高',   '#f85149'];
+    curPrice < zones[0] ? ['特價',  '#58a6ff'] :
+    curPrice < zones[1] ? ['便宜',  '#3fb950'] :
+    curPrice < zones[2] ? ['合理',  '#f0ad4e'] :
+    curPrice < zones[3] ? ['偏高',  '#f85149'] :
+                          ['昂貴',  '#f85149'];
 
   // Push zone to info bar
   const zt = document.getElementById('ibar-zone-tag');
