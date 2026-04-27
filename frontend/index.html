@@ -62,7 +62,7 @@ body {
 .si-id { font-size:10px; color:var(--tx2); }
 .si-p { font-size:13px; font-weight:600; }
 .si-c { font-size:10px; }
-.up { color:var(--grn); } .dn { color:var(--red); }
+.up { color:var(--red); } .dn { color:var(--grn); }   /* 台股：漲紅跌綠 */
 
 /* ── Main ── */
 #main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
@@ -202,7 +202,7 @@ body {
 .by { font-size:10px; text-align:center; white-space:nowrap; line-height:1.2; }
 .bw { height:110px; display:flex; align-items:flex-end; width:100%; border-bottom:1px solid rgba(255,255,255,.2); }
 .br { width:100%; border-radius:3px 3px 0 0; }
-.br.pos { background:#3fb95099; } .br.neg { background:#f8514999; }
+.br.pos { background:#f8514999; } .br.neg { background:#3fb95099; }  /* 台股：正紅負綠 */
 .bl { font-size:10px; color:var(--tx2); text-align:center; white-space:nowrap; width:100%; overflow:hidden; }
 .bsub { font-size:11px; color:var(--tx2); white-space:nowrap; margin-top:6px; align-self:flex-start; }
 /* Valuation zone */
@@ -758,7 +758,7 @@ function drawDailyChart(data) {
   cs.setData(data.map(d => ({ time: d.date, open: +d.open, high: +d.max, low: +d.min, close: +d.close })));
   addVolume(chart, data.map(d => ({
     time: d.date, value: +d.Trading_Volume,
-    color: +d.close >= +d.open ? '#3fb95038' : '#f8514938',
+    color: +d.close >= +d.open ? '#f8514938' : '#3fb95038',
   })));
   chart.timeScale().fitContent();
   watchResize(box);
@@ -776,7 +776,7 @@ function drawMinuteChart(data) {
   })));
   addVolume(chart, data.map(d => ({
     time: minToTs(d.date), value: +d.volume,
-    color: +d.close >= +d.open ? '#3fb95038' : '#f8514938',
+    color: +d.close >= +d.open ? '#f8514938' : '#3fb95038',
   })));
   chart.timeScale().fitContent();
   watchResize(box);
@@ -799,7 +799,7 @@ function chartOpts(box) {
 }
 
 function candleStyle() {
-  return { upColor:'#3fb950', downColor:'#f85149', borderUpColor:'#3fb950', borderDownColor:'#f85149', wickUpColor:'#3fb950', wickDownColor:'#f85149' };
+  return { upColor:'#f85149', downColor:'#3fb950', borderUpColor:'#f85149', borderDownColor:'#3fb950', wickUpColor:'#f85149', wickDownColor:'#3fb950' };
 }
 
 function addVolume(c, data) {
