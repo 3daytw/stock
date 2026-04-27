@@ -6,6 +6,7 @@ import httpx
 import anthropic
 import asyncio
 import os
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -25,6 +26,19 @@ app.add_middleware(
 FINMIND_TOKEN = os.getenv("FINMIND_TOKEN")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
 FINMIND_API = "https://api.finmindtrade.com/api/v4/data"
+
+# ── In-memory cache ───────────────────────────────────────────────────────────
+_cache: dict = {}   # key → (data, stored_at_epoch)
+
+def _cache_get(key: str, ttl: int):
+    """Return cached data if still fresh, else None."""
+    entry = _cache.get(key)
+    if entry and (time.time() - entry[1]) < ttl:
+        return entry[0]
+    return None
+
+def _cache_set(key: str, data):
+    _cache[key] = (data, time.time())
 
 AI_STOCKS = [
     {"id": "2330", "name": "台積電",   "category": "晶片製造"},
@@ -105,6 +119,12 @@ async def get_stock_price(stock_id: str, start_date: str = None, end_date: str =
     if not end_date:
         end_date = datetime.now().strftime("%Y-%m-%d")
 
+    # Cache daily price data for 30 minutes (FinMind only has end-of-day data anyway)
+    key = f"price:{stock_id}:{start_date}:{end_date}"
+    cached = _cache_get(key, ttl=1800)
+    if cached is not None:
+        return cached
+
     async with httpx.AsyncClient(timeout=30) as client:
         try:
             resp = await client.get(FINMIND_API, params={
@@ -118,7 +138,9 @@ async def get_stock_price(stock_id: str, start_date: str = None, end_date: str =
             data = resp.json()
             if data.get("status") != 200:
                 raise HTTPException(status_code=400, detail=data.get("msg", "FinMind API error"))
-            return data.get("data", [])
+            rows = data.get("data", [])
+            _cache_set(key, rows)
+            return rows
         except httpx.HTTPError as e:
             raise HTTPException(status_code=503, detail=f"FinMind API unavailable: {str(e)}")
 
@@ -248,6 +270,10 @@ BROAD_SCREEN_STOCKS = [
 @app.get("/api/screen")
 async def screen_stocks():
     """Scan broad market for value stocks in 特價/便宜/合理 zones."""
+    cached = _cache_get("screen", ttl=3600)   # 1 hour
+    if cached is not None:
+        return cached
+
     today = datetime.now()
     end_str   = today.strftime("%Y-%m-%d")
     per_start = (today - timedelta(days=7)).strftime("%Y-%m-%d")
@@ -369,11 +395,18 @@ async def screen_stocks():
 
     zone_order = {"特價": 0, "便宜": 1, "合理": 2}
     scored.sort(key=lambda x: (zone_order.get(x["zone"], 9), -x.get("dy", 0)))
-    return scored[:20]
+    result = scored[:20]
+    _cache_set("screen", result)
+    return result
 
 
 @app.get("/api/stock/{stock_id}/revenue")
 async def get_stock_revenue(stock_id: str):
+    key = f"rev:{stock_id}"
+    cached = _cache_get(key, ttl=21600)   # 6 hours
+    if cached is not None:
+        return cached
+
     start = (datetime.now() - timedelta(days=760)).strftime("%Y-%m-%d")
     end = datetime.now().strftime("%Y-%m-%d")
     async with httpx.AsyncClient(timeout=30) as client:
@@ -389,13 +422,20 @@ async def get_stock_revenue(stock_id: str):
             result = resp.json()
             if result.get("status") != 200:
                 return []
-            return result.get("data", [])
+            data = result.get("data", [])
+            _cache_set(key, data)
+            return data
         except Exception:
             return []
 
 
 @app.get("/api/stock/{stock_id}/financials")
 async def get_stock_financials(stock_id: str):
+    key = f"fin:{stock_id}"
+    cached = _cache_get(key, ttl=21600)   # 6 hours
+    if cached is not None:
+        return cached
+
     start = (datetime.now() - timedelta(days=760)).strftime("%Y-%m-%d")
     end = datetime.now().strftime("%Y-%m-%d")
     async with httpx.AsyncClient(timeout=30) as client:
@@ -412,13 +452,20 @@ async def get_stock_financials(stock_id: str):
             if result.get("status") != 200:
                 return []
             keep = {"EPS", "GrossProfit", "Revenue", "IncomeAfterTaxes"}
-            return [r for r in result.get("data", []) if r.get("type") in keep]
+            data = [r for r in result.get("data", []) if r.get("type") in keep]
+            _cache_set(key, data)
+            return data
         except Exception:
             return []
 
 
 @app.get("/api/stock/{stock_id}/per")
 async def get_stock_per(stock_id: str):
+    key = f"per:{stock_id}"
+    cached = _cache_get(key, ttl=21600)   # 6 hours
+    if cached is not None:
+        return cached
+
     start = (datetime.now() - timedelta(days=365 * 5)).strftime("%Y-%m-%d")
     end = datetime.now().strftime("%Y-%m-%d")
     async with httpx.AsyncClient(timeout=30) as client:
@@ -434,7 +481,9 @@ async def get_stock_per(stock_id: str):
             result = resp.json()
             if result.get("status") != 200:
                 return []
-            return result.get("data", [])
+            data = result.get("data", [])
+            _cache_set(key, data)
+            return data
         except Exception:
             return []
 
